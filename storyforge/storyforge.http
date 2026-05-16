@@ -1,0 +1,6 @@
+@storyforge_HostAddress = http://localhost:5147
+
+GET {{storyforge_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
