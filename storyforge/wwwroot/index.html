@@ -3,34 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        .container {
-            text-align: center;
-            padding: 20px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-    </style>
+    <title>StoryForge</title>
+    <link rel="stylesheet" href="audio-recorder.module.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body>
-    <div class="container">
-        <h1>Hello World!</h1>
+<body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; color: #333;">
+    <div x-data="audioRecorder()" class="container">
+        <h2 class="title">Tell your story</h2>
+
+        <button
+            class="micBtn"
+            :class="state"
+            @click="toggleRecording"
+            :disabled="state === 'loading'"
+            x-text="state === 'recording' ? '⏹' : '🎤'"
+        ></button>
+
+        <template x-if="state === 'loading'">
+            <div class="status">
+                <span class="spinner"></span> Sending...
+            </div>
+        </template>
+        <template x-if="state === 'idle'">
+            <div class="status">Tap to start recording</div>
+        </template>
+        <template x-if="state === 'recording'">
+            <div class="status">Recording... tap to stop</div>
+        </template>
+        <template x-if="state === 'success'">
+            <div class="status" style="color: #27ae60;">Story sent! ✨</div>
+        </template>
+        <template x-if="state === 'error'">
+            <div class="status" style="color: #e74c3c;" x-text="errorMsg"></div>
+        </template>
     </div>
+
+    <script>
+        function audioRecorder() {
+            return {
+                state: 'idle',
+                errorMsg: '',
+                mediaRecorder: null,
+                audioChunks: [],
+
+                toggleRecording() {
+                    if (this.state === 'recording') {
+                        this.stopRecording();
+                    } else {
+                        this.startRecording();
+                    }
+                },
+
+                startRecording() {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        this.state = 'error';
+                        this.errorMsg = 'Recording not supported in this browser.';
+                        return;
+                    }
+
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                            this.audioChunks = [];
+
+                            this.mediaRecorder.ondataavailable = e => {
+                                if (e.data.size > 0) this.audioChunks.push(e.data);
+                            };
+
+                            this.mediaRecorder.onstop = () => {
+                                stream.getTracks().forEach(t => t.stop());
+                                this.uploadAudio();
+                            };
+
+                            this.mediaRecorder.start();
+                            this.state = 'recording';
+                            this.errorMsg = '';
+                        })
+                        .catch(err => {
+                            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                                this.state = 'error';
+                                this.errorMsg = 'Microphone access denied. Please enable it in your browser settings.';
+                            } else {
+                                this.state = 'error';
+                                this.errorMsg = 'Could not access microphone.';
+                            }
+                        });
+                },
+
+                stopRecording() {
+                    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                        this.mediaRecorder.stop();
+                    }
+                },
+
+                uploadAudio() {
+                    this.state = 'loading';
+
+                    const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', blob, 'recording.webm');
+
+                    fetch('/api/stories/new', { method: 'POST', body: formData })
+                        .then(res => {
+                            if (res.ok) {
+                                this.state = 'success';
+                                setTimeout(() => { this.state = 'idle'; }, 2000);
+                            } else if (res.status === 413) {
+                                this.state = 'error';
+                                this.errorMsg = 'Recording is too large. Please try a shorter recording.';
+                            } else {
+                                this.state = 'error';
+                                this.errorMsg = 'Failed to send recording. Please try again.';
+                            }
+                        })
+                        .catch(() => {
+                            this.state = 'error';
+                            this.errorMsg = 'Network error. Please check your connection.';
+                        });
+                }
+            };
+        }
+    </script>
 </body>
 </html>
