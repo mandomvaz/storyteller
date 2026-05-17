@@ -9,12 +9,34 @@ schema: spec-driven
 #     We use conventional commits
 #     Domain: e-commerce platform
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+context: |
+  ## Backend Tech Stack
+  - .NET 10 with Minimal APIs
+  - Static files served from wwwroot folder
+  - Dependency Injection via constructor injection
+  - Single Responsibility Principle (SRP) is mandatory
+  - Keep concerns separated: Controllers, Services, Models
+  - No complex dependency graphs
+
+  ## Frontend Styling
+  - Use CSS Modules for component-style encapsulation (no build tool needed)
+  - Component CSS files use .module.css extension
+  - CSS Modules provide scoped styles via generated class names
+  - Vanilla CSS approach: component files + CSS modules syntax
+  - No Tailwind or utility-first frameworks
+  - All CSS assets must live in wwwroot folder only
+
+  ## Frontend HTML/JS Approach
+  - Alpine.js recommended for lightweight reactive behavior
+  - Use x-data for component-like isolation (no build tool needed)
+  - x-data contexts act as implicit components
+  - No virtual DOM, direct DOM manipulation
+  - Perfect for tiny projects without framework complexity
+  - All JS/HTML/CSS must live in wwwroot folder
+  - CDN includes acceptable for Alpine.js
+
+  ## Build Tools
+  - No build tools required for this tiny project
+  - Standalone CSS Modules syntax acceptable
+  - Manual asset management when needed
+  - All assets bundled/copied to wwwroot before deployment
