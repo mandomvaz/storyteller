@@ -40,3 +40,9 @@ context: |
   - Standalone CSS Modules syntax acceptable
   - Manual asset management when needed
   - All assets bundled/copied to wwwroot before deployment
+
+  ## Project Values
+  - The primary value of this project IS the learning process itself
+  - Semantic Kernel is the core technology we are learning — all AI features should go through SK's native abstractions (IAudioToTextService, IChatCompletionService, etc.) rather than raw HTTP calls, even when the direct HTTP route is simpler or equally functional
+  - The learning goal takes precedence over "simplest path" in architectural decisions
+  - Pipeline vision: audio transcription → story generation → TTS → image generation, all orchestrated by a single SK Kernel

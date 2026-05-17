@@ -1,9 +1,46 @@
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.TextToAudio;
+using Storyforge.Models;
 using Storyforge.Services;
+using System.ClientModel;
+using OpenAI;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
+
 builder.Services.AddScoped<VoiceStoryService>();
+
+var ollamaEndpoint = builder.Configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
+var ollamaModel = builder.Configuration["Ollama:TextModel"] ?? "llama3.2";
+
+var whisperEndpoint = builder.Configuration["Whisper:Endpoint"] ?? "http://localhost:8000";
+var whisperModel = builder.Configuration["Whisper:Model"] ?? "medium";
+
+var whisperBaseUrl = whisperEndpoint.TrimEnd('/') + "/v1";
+var whisperOptions = new OpenAIClientOptions { Endpoint = new Uri(whisperBaseUrl) };
+var whisperClient = new OpenAIClient(new ApiKeyCredential("sk-faster-whisper-local"), whisperOptions);
+
+var xttsEndpoint = builder.Configuration["Xtts:Endpoint"] ?? "http://localhost:8020";
+var xttsModel = builder.Configuration["Xtts:Model"] ?? "tts-1";
+var xttsVoice = builder.Configuration["Xtts:Voice"] ?? "alloy";
+
+var xttsBaseUrl = xttsEndpoint.TrimEnd('/') + "/v1";
+var xttsOptions = new OpenAIClientOptions
+{
+    Endpoint = new Uri(xttsBaseUrl),
+    
+};
+var xttsClient = new OpenAIClient(new ApiKeyCredential("sk-xtts-local"), xttsOptions);
+
+var kernelBuilder = builder.Services.AddKernel()
+    .AddOllamaChatCompletion(ollamaModel, new Uri(ollamaEndpoint))
+    .AddOpenAIAudioToText(whisperModel, whisperClient);
+
+kernelBuilder.Services.AddSingleton<ITextToAudioService>(sp =>
+    new XttsTextToAudioService(xttsClient, xttsModel, xttsVoice));
 
 var app = builder.Build();
 
@@ -17,14 +54,15 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService voiceStoryService) =>
+app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService voiceStoryService,
+    CancellationToken cancellationToken) =>
     {
         if (!request.HasFormContentType)
         {
             return Results.StatusCode(415);
         }
 
-        var form = await request.ReadFormAsync();
+        var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files["audio"];
 
         if (file is null || file.Length == 0)
@@ -44,9 +82,20 @@ app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService vo
         }
 
         await using var stream = file.OpenReadStream();
-        var storyId = await voiceStoryService.ProcessAudioAsync(stream, contentType);
 
-        return Results.Ok(new { storyId });
+        try
+        {
+            var (transcript, audioData) = await voiceStoryService.ProcessFullPipelineAsync(stream, contentType, cancellationToken);
+            return Results.File(audioData, "audio/wav");
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: ex.Message,
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Audio pipeline failed"
+            );
+        }
     });
 
 app.Run();

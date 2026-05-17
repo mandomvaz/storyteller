@@ -104,13 +104,21 @@
                     formData.append('audio', blob, 'recording.webm');
 
                     fetch('/api/stories/new', { method: 'POST', body: formData })
-                        .then(res => {
+                        .then(async res => {
                             if (res.ok) {
+                                const audioBlob = await res.blob();
+                                const url = URL.createObjectURL(audioBlob);
+                                const audio = new Audio(url);
+                                audio.play();
                                 this.state = 'success';
                                 setTimeout(() => { this.state = 'idle'; }, 2000);
                             } else if (res.status === 413) {
                                 this.state = 'error';
                                 this.errorMsg = 'Recording is too large. Please try a shorter recording.';
+                            } else if (res.status === 500) {
+                                const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+                                this.state = 'error';
+                                this.errorMsg = err.detail || err.title || 'Server error';
                             } else {
                                 this.state = 'error';
                                 this.errorMsg = 'Failed to send recording. Please try again.';
