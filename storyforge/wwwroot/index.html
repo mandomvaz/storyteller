@@ -6,6 +6,8 @@
     <title>StoryForge</title>
     <link rel="stylesheet" href="audio-recorder.module.css">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.0/dist/browser/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr-protocol-msgpack@8.0.0/dist/browser/signalr-protocol-msgpack.min.js"></script>
 </head>
 <body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; color: #333;">
     <div x-data="audioRecorder()" class="container">
@@ -15,7 +17,7 @@
             class="micBtn"
             :class="state"
             @click="toggleRecording"
-            :disabled="state === 'loading'"
+            :disabled="state !== 'idle' && state !== 'recording'"
             x-text="state === 'recording' ? '⏹' : '🎤'"
         ></button>
 
@@ -30,8 +32,23 @@
         <template x-if="state === 'recording'">
             <div class="status">Recording... tap to stop</div>
         </template>
-        <template x-if="state === 'success'">
-            <div class="status" style="color: #27ae60;">Story sent! ✨</div>
+        <template x-if="state === 'transcribing'">
+            <div class="status">
+                <span class="spinner"></span> Transcribing audio...
+            </div>
+        </template>
+        <template x-if="state === 'writing'">
+            <div class="status">
+                <span class="spinner"></span> Writing your story...
+            </div>
+        </template>
+        <template x-if="state === 'generatingAudio'">
+            <div class="status">
+                <span class="spinner"></span> Generating audio...
+            </div>
+        </template>
+        <template x-if="state === 'playing'">
+            <div class="status" style="color: #27ae60;">Playing... ✨</div>
         </template>
         <template x-if="state === 'error'">
             <div class="status" style="color: #e74c3c;" x-text="errorMsg"></div>
@@ -45,6 +62,51 @@
                 errorMsg: '',
                 mediaRecorder: null,
                 audioChunks: [],
+                connectionId: null,
+                connection: null,
+
+                init() {
+                    this.connection = new signalR.HubConnectionBuilder()
+                        .withUrl("/storyHub")
+                        .withHubProtocol(new signalR.protocols.msgpack.MessagePackHubProtocol())
+                        .build();
+
+                    this.connection.on("transcribing", () => {
+                        this.state = 'transcribing';
+                    });
+
+                    this.connection.on("writing", () => {
+                        this.state = 'writing';
+                    });
+
+                    this.connection.on("generatingAudio", () => {
+                        this.state = 'generatingAudio';
+                    });
+
+                    this.connection.on("audioReady", (data) => {
+                        const blob = new Blob([data], { type: 'audio/wav' });
+                        const url = URL.createObjectURL(blob);
+                        const audio = new Audio(url);
+                        audio.play();
+                        this.state = 'playing';
+                        audio.onended = () => {
+                            this.state = 'idle';
+                        };
+                    });
+
+                    this.connection.on("error", (err) => {
+                        const step = err.step ? err.step + ': ' : '';
+                        this.errorMsg = step + err.message;
+                        this.state = 'error';
+                        setTimeout(() => {
+                            this.state = 'idle';
+                        }, 5000);
+                    });
+
+                    this.connection.start().then(() => {
+                        this.connectionId = this.connection.connectionId;
+                    });
+                },
 
                 toggleRecording() {
                     if (this.state === 'recording') {
@@ -102,16 +164,13 @@
                     const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
                     const formData = new FormData();
                     formData.append('audio', blob, 'recording.webm');
+                    formData.append('connectionId', this.connectionId);
 
                     fetch('/api/stories/new', { method: 'POST', body: formData })
                         .then(async res => {
                             if (res.ok) {
-                                const audioBlob = await res.blob();
-                                const url = URL.createObjectURL(audioBlob);
-                                const audio = new Audio(url);
-                                audio.play();
-                                this.state = 'success';
-                                setTimeout(() => { this.state = 'idle'; }, 2000);
+                                const data = await res.json();
+                                this.state = 'loading';
                             } else if (res.status === 413) {
                                 this.state = 'error';
                                 this.errorMsg = 'Recording is too large. Please try a shorter recording.';

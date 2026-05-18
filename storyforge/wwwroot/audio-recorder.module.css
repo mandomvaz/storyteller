@@ -55,9 +55,22 @@
     color: white;
 }
 
-.success {
+.playing {
     background-color: #27ae60;
     color: white;
+}
+
+.transcribing,
+.writing,
+.generatingAudio {
+    background-color: #3498db;
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-blue {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); }
+    50% { transform: scale(1.1); box-shadow: 0 0 0 12px rgba(52, 152, 219, 0); }
 }
 
 .error {

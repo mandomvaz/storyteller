@@ -1,5 +1,7 @@
+using System.Threading.Channels;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.TextToAudio;
+using Storyforge.Hubs;
 using Storyforge.Models;
 using Storyforge.Services;
 using System.ClientModel;
@@ -12,6 +14,16 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
 
 builder.Services.AddScoped<VoiceStoryService>();
+
+builder.Services.AddSignalR().AddMessagePackProtocol();
+
+builder.Services.AddSingleton(Channel.CreateUnbounded<PipelineJob>(new UnboundedChannelOptions
+{
+    SingleReader = true,
+    SingleWriter = false
+}));
+
+builder.Services.AddHostedService<StoryPipelineBackgroundService>();
 
 var ollamaEndpoint = builder.Configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
 var ollamaModel = builder.Configuration["Ollama:TextModel"] ?? "storyteller";
@@ -47,7 +59,9 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService voiceStoryService,
+app.MapHub<StoryHub>("/storyHub");
+
+app.MapPost("/api/stories/new", async (HttpRequest request, Channel<PipelineJob> channel,
     CancellationToken cancellationToken) =>
     {
         if (!request.HasFormContentType)
@@ -57,6 +71,12 @@ app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService vo
 
         var form = await request.ReadFormAsync(cancellationToken);
         var file = form.Files["audio"];
+        var connectionId = form["connectionId"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(connectionId))
+        {
+            return Results.BadRequest(new { error = "Connection ID is required." });
+        }
 
         if (file is null || file.Length == 0)
         {
@@ -74,21 +94,18 @@ app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService vo
             return Results.StatusCode(415);
         }
 
-        await using var stream = file.OpenReadStream();
+        var stream = file.OpenReadStream();
+        var job = new PipelineJob
+        {
+            JobId = Guid.NewGuid(),
+            ConnectionId = connectionId,
+            AudioStream = stream,
+            ContentType = contentType
+        };
 
-        try
-        {
-            var (transcript, audioData, _) = await voiceStoryService.ProcessFullPipelineAsync(stream, contentType, cancellationToken);
-            return Results.File(audioData, "audio/wav");
-        }
-        catch (Exception ex)
-        {
-            return Results.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Audio pipeline failed"
-            );
-        }
+        await channel.Writer.WriteAsync(job, cancellationToken);
+
+        return Results.Ok(new { jobId = job.JobId });
     });
 
 app.Run();
