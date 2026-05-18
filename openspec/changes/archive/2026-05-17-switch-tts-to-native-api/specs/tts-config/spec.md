@@ -1,4 +1,4 @@
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Configurable XTTS endpoint
 
@@ -35,3 +35,17 @@ The system SHALL read the TTS language code from configuration under `Xtts:Langu
 #### Scenario: Custom language from configuration
 - **WHEN** `Xtts:Language` is set to `en`
 - **THEN** the system SHALL use `en` as the `language` parameter
+
+## REMOVED Requirements
+
+### Requirement: Configurable XTTS model name
+
+**Reason**: La API nativa de XTTS no expone el modelo en la petición; el servidor ya tiene el modelo cargado internamente.
+
+**Migration**: Eliminar `Xtts:Model` de `appsettings.json`. No hay sustituto necesario.
+
+### Requirement: API key placeholder
+
+**Reason**: La API nativa de XTTS no requiere autenticación ni clave API, a diferencia de `OpenAIClient`.
+
+**Migration**: Eliminar el `ApiKeyCredential` de `Program.cs`. No hay sustituto necesario.

@@ -14,7 +14,7 @@ builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(Olla
 builder.Services.AddScoped<VoiceStoryService>();
 
 var ollamaEndpoint = builder.Configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
-var ollamaModel = builder.Configuration["Ollama:TextModel"] ?? "llama3.2";
+var ollamaModel = builder.Configuration["Ollama:TextModel"] ?? "storyteller";
 
 var whisperEndpoint = builder.Configuration["Whisper:Endpoint"] ?? "http://localhost:8000";
 var whisperModel = builder.Configuration["Whisper:Model"] ?? "medium";
@@ -24,23 +24,16 @@ var whisperOptions = new OpenAIClientOptions { Endpoint = new Uri(whisperBaseUrl
 var whisperClient = new OpenAIClient(new ApiKeyCredential("sk-faster-whisper-local"), whisperOptions);
 
 var xttsEndpoint = builder.Configuration["Xtts:Endpoint"] ?? "http://localhost:8020";
-var xttsModel = builder.Configuration["Xtts:Model"] ?? "tts-1";
-var xttsVoice = builder.Configuration["Xtts:Voice"] ?? "alloy";
-
-var xttsBaseUrl = xttsEndpoint.TrimEnd('/') + "/v1";
-var xttsOptions = new OpenAIClientOptions
-{
-    Endpoint = new Uri(xttsBaseUrl),
-    
-};
-var xttsClient = new OpenAIClient(new ApiKeyCredential("sk-xtts-local"), xttsOptions);
+var xttsSpeaker = builder.Configuration["Xtts:Speaker"] ?? "alloy";
+var xttsLanguage = builder.Configuration["Xtts:Language"] ?? "es";
+var xttsClient = new HttpClient { BaseAddress = new Uri(xttsEndpoint.TrimEnd('/') + "/") };
 
 var kernelBuilder = builder.Services.AddKernel()
     .AddOllamaChatCompletion(ollamaModel, new Uri(ollamaEndpoint))
     .AddOpenAIAudioToText(whisperModel, whisperClient);
 
 kernelBuilder.Services.AddSingleton<ITextToAudioService>(sp =>
-    new XttsTextToAudioService(xttsClient, xttsModel, xttsVoice));
+    new XttsTextToAudioService(xttsClient, xttsSpeaker, xttsLanguage));
 
 var app = builder.Build();
 
@@ -85,7 +78,7 @@ app.MapPost("/api/stories/new", async (HttpRequest request, VoiceStoryService vo
 
         try
         {
-            var (transcript, audioData) = await voiceStoryService.ProcessFullPipelineAsync(stream, contentType, cancellationToken);
+            var (transcript, audioData, _) = await voiceStoryService.ProcessFullPipelineAsync(stream, contentType, cancellationToken);
             return Results.File(audioData, "audio/wav");
         }
         catch (Exception ex)
