@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Real-time pipeline status via SignalR
 
@@ -40,17 +40,11 @@ The system SHALL use `System.Threading.Channels.Channel<T>` as an in-memory, unb
 - **WHEN** a job is available in the channel
 - **THEN** the `BackgroundService` SHALL read it, create a DI scope, and delegate to the pipeline runner
 
-## MODIFIED Requirements
-
-### Requirement: Audio delivered as a single blob
-**Reason**: Replaced by per-chunk delivery (`"audioChunk"` + `"storyComplete"`). Single blob delivery no longer matches the parallel paragraph architecture.
-**Migration**: Frontend must handle multiple `"audioChunk"` events and a final `"storyComplete"` event instead of a single `"audioReady"` event.
-
 ## REMOVED Requirements
 
-### Requirement: Full pipeline event for audio generation step
+### Requirement: Pipeline progress events for audio generation step
 
-**Reason**: Audio generation is now continuous and per-paragraph. The `generatingAudio` event is replaced by the existence of `audioChunk` events arriving progressively.
+**Reason**: Audio generation is now continuous and per-paragraph. The `generatingAudio` event is replaced by the arrival of `audioChunk` events.
 
 **Migration**: Remove `generatingAudio` state from frontend state machine. Replace with logic that receives `audioChunk` events and plays them sequentially until `storyComplete`.
 

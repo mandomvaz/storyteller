@@ -61,8 +61,7 @@
 }
 
 .transcribing,
-.writing,
-.generatingAudio {
+.writing {
     background-color: #3498db;
     color: white;
     animation: pulse 1.5s ease-in-out infinite;

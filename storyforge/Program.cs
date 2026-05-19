@@ -14,6 +14,20 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
 
 builder.Services.AddScoped<VoiceStoryService>();
+builder.Services.AddScoped<TextToAudioService>();
+builder.Services.AddScoped<AudioDeliveryService>();
+builder.Services.AddScoped<StoryPipelineRunner>();
+
+builder.Services.AddScoped(_ => Channel.CreateUnbounded<TextUnit>(new UnboundedChannelOptions
+{
+    SingleReader = true,
+    SingleWriter = false
+}));
+builder.Services.AddScoped(_ => Channel.CreateUnbounded<AudioUnit>(new UnboundedChannelOptions
+{
+    SingleReader = true,
+    SingleWriter = false
+}));
 
 builder.Services.AddSignalR().AddMessagePackProtocol();
 
@@ -23,7 +37,7 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<PipelineJob>(new Unbounded
     SingleWriter = false
 }));
 
-builder.Services.AddHostedService<StoryPipelineBackgroundService>();
+builder.Services.AddHostedService<StoryPipelineWorker>();
 
 var ollamaEndpoint = builder.Configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
 var ollamaModel = builder.Configuration["Ollama:TextModel"] ?? "storyteller";

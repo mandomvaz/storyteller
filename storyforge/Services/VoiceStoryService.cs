@@ -1,8 +1,10 @@
 using System.Text;
+using System.Threading.Channels;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.AudioToText;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.TextToAudio;
+using Storyforge.Hubs;
 using Storyforge.Models;
 
 namespace Storyforge.Services;
@@ -10,10 +12,17 @@ namespace Storyforge.Services;
 public class VoiceStoryService
 {
     private readonly Kernel _kernel;
+    private readonly Channel<TextUnit> _textCh;
+    private readonly IHubContext<StoryHub> _hubContext;
 
-    public VoiceStoryService(Kernel kernel)
+    public VoiceStoryService(
+        Kernel kernel,
+        Channel<TextUnit> textCh,
+        IHubContext<StoryHub> hubContext)
     {
         _kernel = kernel;
+        _textCh = textCh;
+        _hubContext = hubContext;
     }
 
     public async Task<string> TranscribeAudioAsync(Stream audioStream, string contentType, CancellationToken cancellationToken = default)
@@ -36,28 +45,8 @@ public class VoiceStoryService
         return storyResponse.Content ?? string.Empty;
     }
 
-    public async Task<byte[]> GenerateAudioAsync(string storyText, CancellationToken cancellationToken = default)
-    {
-        var textToAudioService = _kernel.GetRequiredService<ITextToAudioService>();
-        var speechContent = await textToAudioService.GetAudioContentAsync(storyText, cancellationToken: cancellationToken);
-        return speechContent.Data?.ToArray() ?? throw new InvalidOperationException("No audio data generated.");
-    }
-
-    public async Task<(string Transcript, byte[] AudioData, string Title)> ProcessFullPipelineAsync(
-        Stream audioStream, string contentType, CancellationToken cancellationToken = default)
-    {
-        var transcript = await TranscribeAudioAsync(audioStream, contentType, cancellationToken);
-        var storyText = await GenerateStoryAsync(transcript, cancellationToken);
-
-        var lines = storyText.Split('\n', StringSplitOptions.None);
-        var title = lines.FirstOrDefault()?.Trim() ?? string.Empty;
-
-        var audioData = await GenerateAudioAsync(storyText, cancellationToken);
-        return (transcript, audioData, title);
-    }
-
-    public async Task<(Story Story, byte[] AudioData)> GenerateStoryFromTextAsync(
-        string text, CancellationToken cancellationToken = default)
+    public async Task<Story> GenerateStoryFromTextAsync(
+        string text, string jobId, string connectionId, CancellationToken cancellationToken = default)
     {
         var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
         var chatHistory = new ChatHistory();
@@ -67,58 +56,74 @@ public class VoiceStoryService
         var story = new Story();
         var isFirstParagraph = true;
 
-        await foreach (var chunk in chatCompletionService.GetStreamingChatMessageContentsAsync(
-            chatHistory, cancellationToken: cancellationToken))
+        try
         {
-            buffer.Append(chunk.Content ?? string.Empty);
-
-            var textSoFar = buffer.ToString();
-            var idx = textSoFar.IndexOf("\n\n", StringComparison.Ordinal);
-
-            while (idx >= 0)
+            await foreach (var chunk in chatCompletionService.GetStreamingChatMessageContentsAsync(
+                chatHistory, cancellationToken: cancellationToken))
             {
-                var paragraph = textSoFar[..idx].Trim();
-                textSoFar = textSoFar[(idx + 2)..];
-                buffer.Clear();
-                buffer.Append(textSoFar);
+                buffer.Append(chunk.Content ?? string.Empty);
 
-                if (paragraph.Length > 0)
+                var textSoFar = buffer.ToString();
+                var idx = textSoFar.IndexOf("\n\n", StringComparison.Ordinal);
+
+                while (idx >= 0)
+                {
+                    var paragraph = textSoFar[..idx].Trim();
+                    textSoFar = textSoFar[(idx + 2)..];
+                    buffer.Clear();
+                    buffer.Append(textSoFar);
+
+                    if (paragraph.Length > 0)
+                    {
+                        if (isFirstParagraph)
+                        {
+                            story.Title = paragraph;
+                            isFirstParagraph = false;
+                        }
+                        else
+                        {
+                            story.Paragraphs.Add(paragraph);
+                        }
+
+                        await _textCh.Writer.WriteAsync(
+                            new TextUnit(jobId, connectionId, paragraph), cancellationToken);
+                    }
+
+                    idx = textSoFar.IndexOf("\n\n", StringComparison.Ordinal);
+                }
+            }
+
+            if (buffer.Length > 0)
+            {
+                var remaining = buffer.ToString().Trim();
+                if (remaining.Length > 0)
                 {
                     if (isFirstParagraph)
-                    {
-                        story.Title = paragraph;
-                        isFirstParagraph = false;
-                    }
+                        story.Title = remaining;
                     else
-                    {
-                        story.Paragraphs.Add(paragraph);
-                    }
+                        story.Paragraphs.Add(remaining);
+
+                    await _textCh.Writer.WriteAsync(
+                        new TextUnit(jobId, connectionId, remaining), cancellationToken);
                 }
-
-                idx = textSoFar.IndexOf("\n\n", StringComparison.Ordinal);
             }
         }
-
-        if (buffer.Length > 0)
+        catch (OperationCanceledException)
         {
-            var remaining = buffer.ToString().Trim();
-            if (remaining.Length > 0)
-            {
-                if (isFirstParagraph)
-                    story.Title = remaining;
-                else
-                    story.Paragraphs.Add(remaining);
-            }
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await _hubContext.Clients.Client(connectionId).SendAsync("error",
+                new { jobId, connectionId, step = "story", message = ex.Message },
+                cancellationToken);
+            throw;
+        }
+        finally
+        {
+            _textCh.Writer.Complete();
         }
 
-        var ttsText = story.Paragraphs.Count > 0
-            ? string.Join("\n\n", story.Title, string.Join("\n\n", story.Paragraphs))
-            : story.Title;
-
-        var textToAudioService = _kernel.GetRequiredService<ITextToAudioService>();
-        var audioContent = await textToAudioService.GetAudioContentAsync(ttsText, cancellationToken: cancellationToken);
-        var audioData = audioContent.Data?.ToArray() ?? throw new InvalidOperationException("No audio data generated.");
-
-        return (story, audioData);
+        return story;
     }
 }

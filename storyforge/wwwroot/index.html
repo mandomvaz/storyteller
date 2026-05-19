@@ -42,11 +42,7 @@
                 <span class="spinner"></span> Writing your story...
             </div>
         </template>
-        <template x-if="state === 'generatingAudio'">
-            <div class="status">
-                <span class="spinner"></span> Generating audio...
-            </div>
-        </template>
+
         <template x-if="state === 'playing'">
             <div class="status" style="color: #27ae60;">Playing... ✨</div>
         </template>
@@ -62,6 +58,8 @@
                 errorMsg: '',
                 mediaRecorder: null,
                 audioChunks: [],
+                playbackQueue: [],
+                isPlaying: false,
                 connectionId: null,
                 connection: null,
 
@@ -79,19 +77,16 @@
                         this.state = 'writing';
                     });
 
-                    this.connection.on("generatingAudio", () => {
-                        this.state = 'generatingAudio';
+                    this.connection.on("audioChunk", (data) => {
+                        const blob = new Blob([data], { type: 'audio/wav' });
+                        this.playbackQueue.push(blob);
+                        if (!this.isPlaying) {
+                            this.playNext();
+                        }
                     });
 
-                    this.connection.on("audioReady", (data) => {
-                        const blob = new Blob([data], { type: 'audio/wav' });
-                        const url = URL.createObjectURL(blob);
-                        const audio = new Audio(url);
-                        audio.play();
-                        this.state = 'playing';
-                        audio.onended = () => {
-                            this.state = 'idle';
-                        };
+                    this.connection.on("storyComplete", () => {
+                        this.state = 'idle';
                     });
 
                     this.connection.on("error", (err) => {
@@ -106,6 +101,23 @@
                     this.connection.start().then(() => {
                         this.connectionId = this.connection.connectionId;
                     });
+                },
+
+                playNext() {
+                    if (this.playbackQueue.length === 0) {
+                        this.isPlaying = false;
+                        return;
+                    }
+                    this.isPlaying = true;
+                    const blob = this.playbackQueue.shift();
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    this.state = 'playing';
+                    audio.play();
+                    audio.onended = () => {
+                        URL.revokeObjectURL(url);
+                        this.playNext();
+                    };
                 },
 
                 toggleRecording() {
