@@ -3,3 +3,24 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+# IDE
+.idea/
+.vs/
+*.suo
+*.user
+*.DotSettings
+*.DotSettings.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug / generated
+*.wav
+*.mp3
+*.log
+tts_debug.*
+
+# Node
+node_modules/
