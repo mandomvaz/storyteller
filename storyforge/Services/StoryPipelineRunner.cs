@@ -10,17 +10,23 @@ public class StoryPipelineRunner
     private readonly TextToAudioService _textToAudioService;
     private readonly AudioDeliveryService _audioDeliveryService;
     private readonly IHubContext<StoryHub> _hubContext;
+    private readonly BadgeService _badgeService;
+    private readonly PersistenceService _persistenceService;
 
     public StoryPipelineRunner(
         VoiceStoryService voiceStoryService,
         TextToAudioService textToAudioService,
         AudioDeliveryService audioDeliveryService,
-        IHubContext<StoryHub> hubContext)
+        IHubContext<StoryHub> hubContext,
+        BadgeService badgeService,
+        PersistenceService persistenceService)
     {
         _voiceStoryService = voiceStoryService;
         _textToAudioService = textToAudioService;
         _audioDeliveryService = audioDeliveryService;
         _hubContext = hubContext;
+        _badgeService = badgeService;
+        _persistenceService = persistenceService;
     }
 
     public async Task RunAsync(PipelineJob job, CancellationToken cancellationToken)
@@ -62,6 +68,24 @@ public class StoryPipelineRunner
                     cts.Cancel();
                     await Task.WhenAll(tasks.Where(t => !t.IsCompleted));
                     throw completed.Exception!.InnerExceptions.First();
+                }
+
+                if (completed == storyTask && storyTask.IsCompletedSuccessfully)
+                {
+                    var story = await storyTask;
+
+                    try
+                    {
+                        story.Badge = await _badgeService.GenerateBadgeAsync(story);
+                    }
+                    catch (Exception ex)
+                    {
+                        await _hubContext.Clients.Client(job.ConnectionId).SendAsync("error",
+                            new { jobId = job.JobId, connectionId = job.ConnectionId, step = "badge", message = ex.Message },
+                            cts.Token);
+                    }
+
+                    await _persistenceService.CacheAsync(story);
                 }
             }
         }

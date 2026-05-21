@@ -1,0 +1,1 @@
+Genera exactamente 5 emojis que representen el tono de esta historia. Devuelve solo los 5 emojis, nada más.

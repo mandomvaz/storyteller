@@ -6,12 +6,24 @@ using Storyforge.Models;
 using Storyforge.Services;
 using System.ClientModel;
 using OpenAI;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
 builder.Services.Configure<OllamaSettings>(builder.Configuration.GetSection(OllamaSettings.SectionName));
+builder.Services.Configure<DatabaseSettings>(builder.Configuration.GetSection(DatabaseSettings.SectionName));
+builder.Services.Configure<BadgePromptSettings>(builder.Configuration.GetSection(BadgePromptSettings.SectionName));
+
+builder.Services.AddSingleton<IStoryRepository>(sp =>
+    new SqliteStoryRepository(builder.Configuration
+        .GetSection(DatabaseSettings.SectionName)
+        .Get<DatabaseSettings>() ?? new DatabaseSettings()));
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<PersistenceService>();
+builder.Services.AddSingleton<BadgeService>();
 
 builder.Services.AddScoped<VoiceStoryService>();
 builder.Services.AddScoped<TextToAudioService>();
@@ -61,7 +73,25 @@ var kernelBuilder = builder.Services.AddKernel()
 kernelBuilder.Services.AddSingleton<ITextToAudioService>(sp =>
     new XttsTextToAudioService(xttsClient, xttsSpeaker, xttsLanguage));
 
+var badgePromptPath = builder.Configuration["BadgePrompt:Path"] ?? "Prompts/badge.txt";
+var badgePromptText = "Genera exactamente 5 emojis que representen el tono de esta historia. Devuelve solo los 5 emojis, nada más.";
+if (File.Exists(badgePromptPath))
+{
+    badgePromptText = File.ReadAllText(badgePromptPath);
+}
+else
+{
+    Console.WriteLine($"WARNING: Badge prompt file not found at {badgePromptPath}, using default prompt");
+}
+var badgeFunc = KernelFunctionFactory.CreateFromPrompt(badgePromptText,
+    new OpenAIPromptExecutionSettings { MaxTokens = 15 });
+builder.Services.AddKeyedSingleton<KernelFunction>("badge", badgeFunc);
+
 var app = builder.Build();
+
+// Initialize database on startup
+var repository = app.Services.GetRequiredService<IStoryRepository>();
+await repository.InitDatabaseAsync();
 
 if (app.Environment.IsDevelopment())
 {
@@ -121,5 +151,11 @@ app.MapPost("/api/stories/new", async (HttpRequest request, Channel<PipelineJob>
 
         return Results.Ok(new { jobId = job.JobId });
     });
+
+app.MapPost("/api/stories/{id:guid}/save", async (Guid id, PersistenceService persistenceService) =>
+{
+    var saved = await persistenceService.PersistAsync(id);
+    return saved ? Results.Ok(new { saved = true }) : Results.NotFound(new { error = "Story not found or expired" });
+});
 
 app.Run();
