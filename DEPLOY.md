@@ -128,36 +128,53 @@ Crea un archivo llamado `appsettings.json` en la carpeta donde tengas (o vayas a
 
 ### 2. Configurar el `docker-compose.yml`
 
-Para que Docker monte tu archivo de configuración y guarde la base de datos SQLite sin que se borre al reiniciar el contenedor, tu archivo `docker-compose.yml` debe estar estructurado de la siguiente manera:
+Para que Docker monte tu archivo de configuración y guarde la base de datos SQLite sin que se borre al reiniciar el contenedor, tu archivo `docker-compose.yml` debe estar estructurado de la siguiente manera. Nota que hemos cambiado el puerto del host (ej. **8082**) para evitar conflictos con otros servicios de tu servidor (como `iptv-host` u otros servidores web que escuchen en el puerto `8080`):
 
 ```yaml
 services:
   storyforge:
     image: storyforge:latest
     container_name: storyforge-app
+    user: root # <-- CRÍTICO: Ejecuta como root para tener permisos de escritura en los volúmenes del host
     ports:
-      - "8080:8080" # Mapea el puerto 8080 del contenedor al puerto 8080 de tu servidor
+      - "8082:8080" # Mapea el puerto 8082 del servidor (host) al puerto 8080 del contenedor
     volumes:
       # 1. Monta el appsettings.json externo sobre el interno de la app
-      - ./appsettings.json:/app/appsettings.json:ro
+      - /apps/storyforge/appsettings.json:/app/appsettings.json:ro
       
       # 2. Persiste la base de datos de cuentos en el host para no perder datos
-      - ./data:/app/Data
+      - /data/storyforge:/app/Data:rw
       
       # 3. Opcional: Monta prompts personalizados si los utilizas
-      - ./prompts:/app/Prompts
+      - /apps/storyforge/prompts:/app/Prompts
     restart: unless-stopped
 ```
 
+> [!IMPORTANT]
+> **Resolución de Errores de Permisos (SQLite Error 14: unable to open database file)**:
+> Por defecto, las imágenes de .NET 8/9/10 se ejecutan bajo un usuario no-root limitado llamado `app` (UID `1654`). Al montar carpetas de tu servidor host (`/data/storyforge`), el contenedor no tendrá permisos para crear o escribir el archivo de base de datos SQLite `storyforge.db` y fallará en el arranque.
+> 
+> Tienes **dos formas** de resolver esto:
+> 1. **Opción A (La más sencilla y recomendada)**: Añadir `user: root` en la definición del servicio en tu `docker-compose.yml` (tal como se muestra en la plantilla de arriba). Esto eleva los privilegios del proceso dentro del contenedor.
+> 2. **Opción B (Seguridad Linux)**: Mantener el usuario no-root y cambiar los permisos de la carpeta del host en tu servidor ejecutando:
+>    ```bash
+>    sudo chown -R 1654:1654 /data/storyforge
+>    ```
+>    o dando permisos completos de escritura a todos en dicha carpeta:
+>    ```bash
+>    sudo chmod -R 777 /data/storyforge
+>    ```
+
 * **Explicación de los volúmenes (`volumes`):**
-  * `./appsettings.json:/app/appsettings.json:ro`: Toma el archivo `appsettings.json` que acabas de configurar en la carpeta actual del servidor y lo coloca dentro del contenedor en la ruta `/app/appsettings.json`. El `:ro` final significa *Read-Only* (Solo Lectura) por seguridad.
-  * `./data:/app/Data`: Crea una carpeta llamada `data` en el servidor de destino que se conecta con la carpeta `/app/Data` del contenedor. Aquí se guardará de forma persistente la base de datos SQLite (`storyforge.db`), por lo que aunque detengas, borres o actualices el contenedor, **nunca perderás tus cuentos guardados**.
+  * `/apps/storyforge/appsettings.json:/app/appsettings.json:ro`: Toma el archivo `appsettings.json` físico alojado en tu servidor en la ruta absoluta `/apps/storyforge/appsettings.json` y lo coloca dentro del contenedor en `/app/appsettings.json` en modo de solo lectura (`:ro`).
+  * `/data/storyforge:/app/Data:rw`: Mapea el directorio `/data/storyforge` de tu servidor con la carpeta `/app/Data` del contenedor. Aquí se guardará de forma persistente la base de datos SQLite (`storyforge.db`), por lo que aunque detengas, borres o actualices el contenedor, **nunca perderás tus cuentos guardados**.
+  * `/apps/storyforge/prompts:/app/Prompts`: Permite cargar prompts personalizados (como `badge.txt`) alojados externamente.
 
 ---
 
 ## 🚀 Puesta en Marcha
 
-Una vez configurados los archivos `docker-compose.yml` y `appsettings.json` en la misma carpeta del servidor:
+Una vez configurados los archivos `docker-compose.yml` y `appsettings.json` en las rutas absolutas indicadas del servidor:
 
 1. Inicia el contenedor ejecutando:
    ```bash
@@ -170,11 +187,11 @@ Una vez configurados los archivos `docker-compose.yml` y `appsettings.json` en l
    docker compose logs -f storyforge
    ```
 
-3. Abre tu navegador web favorito y accede a la dirección de tu servidor en el puerto configurado:
+3. Abre tu navegador web favorito y accede a la dirección de tu servidor en el puerto configurado (ej. **8082**):
    ```text
-   http://<IP_DE_TU_SERVIDOR>:8080
+   http://<IP_DE_TU_SERVIDOR>:8082
    ```
-   *Si estás probándolo en la misma máquina física, puedes entrar a `http://localhost:8080`.*
+   *Si estás probándolo en la misma máquina física, puedes entrar a `http://localhost:8082`.*
 
 ---
 

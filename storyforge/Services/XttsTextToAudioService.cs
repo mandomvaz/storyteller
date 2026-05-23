@@ -53,7 +53,16 @@ public class XttsTextToAudioService : ITextToAudioService
         var responseBody = await response.Content.ReadFromJsonAsync<TtsResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Empty response from TTS server");
 
-        var audioBytes = await _httpClient.GetByteArrayAsync(responseBody.Url, cancellationToken);
+        // El servidor XTTS en el host devuelve una URL absoluta usando "localhost" (ej. http://localhost:8020/temp/xxx.wav).
+        // Dado que estamos dentro de un contenedor Docker, resolver "localhost" dentro del contenedor fallará.
+        // Extraemos solo la ruta relativa para realizar la descarga utilizando la IP real configurada en el HttpClient.
+        string downloadPath = responseBody.Url;
+        if (Uri.TryCreate(responseBody.Url, UriKind.Absolute, out var absoluteUri))
+        {
+            downloadPath = absoluteUri.PathAndQuery.TrimStart('/');
+        }
+
+        var audioBytes = await _httpClient.GetByteArrayAsync(downloadPath, cancellationToken);
         sw.Stop();
         Console.WriteLine($"[XTTS_API_COMPLETE] [{DateTime.UtcNow:HH:mm:ss.fff}] TTS response fetched. AudioBytes={audioBytes.Length}. Duration={sw.ElapsedMilliseconds}ms");
 
