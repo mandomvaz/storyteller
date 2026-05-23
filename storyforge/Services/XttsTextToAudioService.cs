@@ -44,13 +44,18 @@ public class XttsTextToAudioService : ITextToAudioService
             language = _language
         };
 
-        var response = await _httpClient.PostAsJsonAsync("/tts_to_audio/", requestBody, cancellationToken);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Console.WriteLine($"[XTTS_API_START] [{DateTime.UtcNow:HH:mm:ss.fff}] TTS request starting. TextLength={text.Length} chars - '{text[..Math.Min(25, text.Length)]}...'");
+
+        var response = await _httpClient.PostAsJsonAsync("tts_to_audio", requestBody, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var responseBody = await response.Content.ReadFromJsonAsync<TtsResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Empty response from TTS server");
 
         var audioBytes = await _httpClient.GetByteArrayAsync(responseBody.Url, cancellationToken);
+        sw.Stop();
+        Console.WriteLine($"[XTTS_API_COMPLETE] [{DateTime.UtcNow:HH:mm:ss.fff}] TTS response fetched. AudioBytes={audioBytes.Length}. Duration={sw.ElapsedMilliseconds}ms");
 
         var audioContent = new AudioContent(audioBytes, "audio/wav");
         return new List<AudioContent> { audioContent };

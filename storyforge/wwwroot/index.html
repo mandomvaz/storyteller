@@ -1,60 +1,200 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StoryForge</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StoryForge Mágico</title>
     <link rel="stylesheet" href="audio-recorder.module.css">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.0/dist/browser/signalr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr-protocol-msgpack@8.0.0/dist/browser/signalr-protocol-msgpack.min.js"></script>
 </head>
-<body style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; color: #333;">
-    <div x-data="audioRecorder()" class="container">
-        <h2 class="title">Tell your story</h2>
+<body>
 
-        <button
-            class="micBtn"
-            :class="state"
-            @click="toggleRecording"
-            :disabled="state !== 'idle' && state !== 'recording'"
-            x-text="state === 'recording' ? '⏹' : '🎤'"
-        ></button>
+    <div x-data="audioRecorder()" x-init="init()" class="app-container" x-cloak>
+        
+        <!-- Beautiful Magical Warmup Loading Screen Overlay (No Text!) -->
+        <div x-show="state === 'warming'"
+             x-transition:leave="transition ease-in duration-1000"
+             x-transition:leave-start="opacity-100 transform scale-100"
+             x-transition:leave-end="opacity-0 transform scale-95"
+             class="warmup-overlay">
+            
+            <!-- Floating sparkles rising from the portal -->
+            <div class="warmup-sparkles">
+                <template x-for="ws in warmupSparkles" :key="ws.id">
+                    <div class="warmup-sparkle" :style="`left: ${ws.x}%; top: ${ws.y}%; width: ${ws.size}px; height: ${ws.size}px; animation-delay: ${ws.delay}s; animation-duration: ${ws.duration}s;`"></div>
+                </template>
+            </div>
 
-        <template x-if="state === 'loading'">
-            <div class="status">
-                <span class="spinner"></span> Sending...
-            </div>
-        </template>
-        <template x-if="state === 'idle'">
-            <div class="status">Tap to start recording</div>
-        </template>
-        <template x-if="state === 'recording'">
-            <div class="status">Recording... tap to stop</div>
-        </template>
-        <template x-if="state === 'transcribing'">
-            <div class="status">
-                <span class="spinner"></span> Transcribing audio...
-            </div>
-        </template>
-        <template x-if="state === 'writing'">
-            <div class="status">
-                <span class="spinner"></span> Writing your story...
-            </div>
-        </template>
+            <!-- Highly animated vector celestial portal / crystal ball SVG -->
+            <svg class="magic-warmup-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="orbGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#fd79a8" />
+                        <stop offset="60%" stop-color="#a29bfe" />
+                        <stop offset="100%" stop-color="#6c5ce7" />
+                    </radialGradient>
+                    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#ffeaa7" />
+                        <stop offset="50%" stop-color="#d4af37" />
+                        <stop offset="100%" stop-color="#fdcb6e" />
+                    </linearGradient>
+                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="6" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                </defs>
 
-        <template x-if="state === 'playing'">
-            <div class="status" style="color: #27ae60;">Playing... ✨</div>
-        </template>
-        <template x-if="state === 'error'">
-            <div class="status" style="color: #e74c3c;" x-text="errorMsg"></div>
-        </template>
+                <!-- Outer Gold Rotating Ring of Stars -->
+                <circle cx="100" cy="100" r="80" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="12 18 6 18" fill="none" class="portal-ring" />
+                
+                <!-- Inner Magic Purple/Gold Dash Ring -->
+                <circle cx="100" cy="100" r="62" stroke="#ffeaa7" stroke-width="2" stroke-dasharray="35 15" fill="none" class="portal-ring-inner" opacity="0.7" />
+                
+                <!-- Magical glowing star symbols along the outer path -->
+                <polygon points="100,28 102,34 108,34 103,38 105,44 100,40 95,44 97,38 92,34 98,34" fill="#d4af37" opacity="0.8" />
+                <polygon points="100,172 102,166 108,166 103,162 105,156 100,160 95,156 97,162 92,166 98,166" fill="#d4af37" opacity="0.8" />
+                <polygon points="28,100 34,102 34,108 38,103 44,105 40,100 44,95 38,97 34,92 34,98" fill="#d4af37" opacity="0.8" />
+                <polygon points="172,100 166,102 166,108 162,103 156,105 160,100 156,95 162,97 166,92 166,98" fill="#d4af37" opacity="0.8" />
+
+                <!-- Central Magic Glowing Orb / Crystal Ball -->
+                <circle cx="100" cy="100" r="42" fill="url(#orbGrad)" filter="url(#glow)" class="magic-orb" />
+                
+                <!-- Inner floating gold star in center -->
+                <polygon points="100,85 104,94 114,94 106,100 109,109 100,103 91,109 94,100 86,94 96,94" fill="#ffffff" class="portal-star" />
+            </svg>
+        </div>
+
+        <!-- Floating sparkles in background -->
+        <div class="bg-sparkles">
+            <template x-for="s in sparklesList" :key="s.id">
+                <div class="sparkle" :style="`left: ${s.x}%; top: ${s.y}%; width: ${s.size}px; height: ${s.size}px; animation-delay: ${s.delay}s; animation-duration: ${s.duration}s;`"></div>
+            </template>
+        </div>
+
+        <!-- Magic glowing aura behind the book -->
+        <div class="book-glow" x-show="state === 'playing' || state === 'transcribing' || state === 'writing'"></div>
+
+        <!-- Flying music notes container during playing -->
+        <div class="music-notes-container" x-show="state === 'playing'">
+            <template x-for="n in musicNotes" :key="n.id">
+                <span class="note" :style="`left: 50%; top: 40%; color: ${n.color}; --x: ${n.x}px; --y: ${n.y}px; --rot: ${n.rot}deg;`" x-text="n.symbol"></span>
+            </template>
+        </div>
+
+        <!-- Book Wrapper -->
+        <div class="book-wrapper">
+            <!-- Vector Magic Book SVG -->
+            <svg class="magic-book" viewBox="0 0 1000 700" xmlns="http://www.w3.org/2000/svg">
+                <!-- Book shadow -->
+                <ellipse cx="500" cy="620" rx="420" ry="40" fill="rgba(0,0,0,0.15)"/>
+                
+                <!-- Outer Leather Cover (Rich Brown) -->
+                <path d="M 60 80 C 60 80, 280 60, 490 95 L 490 585 C 280 550, 60 570, 60 570 Z" fill="#4a2c11" stroke="#d4af37" stroke-width="8" stroke-linejoin="round"/>
+                <path d="M 940 80 C 940 80, 720 60, 510 95 L 510 585 C 720 550, 940 570, 940 570 Z" fill="#4a2c11" stroke="#d4af37" stroke-width="8" stroke-linejoin="round"/>
+                
+                <!-- Book spine / Center leather crease -->
+                <rect x="490" y="88" width="20" height="498" fill="#2c1705" />
+
+                <!-- Left Page Stack (Beige layers for thickness) -->
+                <path d="M 75 95 C 75 95, 285 75, 485 105 L 485 570 C 285 540, 75 560, 75 560 Z" fill="#e2d9c3" />
+                <path d="M 85 92 C 85 92, 290 72, 485 102 L 485 565 C 290 535, 85 555, 85 555 Z" fill="#ebdcb9" />
+                <path d="M 95 88 C 95 88, 295 68, 485 98 L 485 560 C 295 530, 95 550, 95 550 Z" fill="#fdfbf7" />
+
+                <!-- Right Page Stack (Beige layers for thickness) -->
+                <path d="M 925 95 C 925 95, 715 75, 515 105 L 515 570 C 715 540, 925 560, 925 560 Z" fill="#e2d9c3" />
+                <path d="M 915 92 C 915 92, 710 72, 515 102 L 515 565 C 710 535, 915 555, 915 555 Z" fill="#ebdcb9" />
+                <path d="M 905 88 C 905 88, 705 68, 515 98 L 515 560 C 705 530, 905 550, 905 550 Z" fill="#fdfbf7" />
+
+                <!-- Gold filigree decorations in corners of pages -->
+                <!-- Left Top Corner -->
+                <path d="M 120 120 C 130 110, 150 110, 160 120 M 120 120 C 110 130, 110 150, 120 160" stroke="#d4af37" stroke-width="3" fill="none" opacity="0.6"/>
+                <!-- Right Top Corner -->
+                <path d="M 880 120 C 870 110, 850 110, 840 120 M 880 120 C 890 130, 890 150, 880 160" stroke="#d4af37" stroke-width="3" fill="none" opacity="0.6"/>
+
+                <!-- Golden Bookmark Ribbon sticking out bottom -->
+                <path d="M 492 560 L 492 630 L 508 615 L 524 630 L 524 560 Z" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+            </svg>
+        </div>
+
+        <!-- UI Overlay: Interactive Buttons and States -->
+        <div class="ui-overlay">
+
+            <!-- 1. RECORD / IDLE STATE -->
+            <button x-show="state === 'idle'" @click="toggleRecording" class="center-btn btn-record" title="Grabar">
+                <!-- Large Mic SVG -->
+                <svg viewBox="0 0 24 24">
+                    <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+                </svg>
+            </button>
+
+            <!-- 2. RECORDING STATE -->
+            <button x-show="state === 'recording'" @click="toggleRecording" class="center-btn btn-stop" title="Detener">
+                <!-- Stop SVG -->
+                <svg viewBox="0 0 24 24">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                </svg>
+            </button>
+
+            <!-- 3. CASTING SPELL / WAITING STATE (Disabled) -->
+            <button x-show="state === 'loading' || state === 'transcribing' || state === 'writing'" disabled class="center-btn btn-wait">
+                <!-- Glowing 5-pointed magic star SVG -->
+                <svg viewBox="0 0 24 24">
+                    <path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z" />
+                </svg>
+            </button>
+
+            <!-- 4. PLAYING STATE -->
+            <button x-show="state === 'playing'" disabled class="center-btn btn-play">
+                <!-- Joyful Playback Note SVG -->
+                <svg viewBox="0 0 24 24">
+                    <path d="M12,3V12.26C11.44,12.09 10.83,12 10,12A4,4 0 0,0 6,16A4,4 0 0,0 10,20A4,4 0 0,0 14,16V7H18V3H12Z" />
+                </svg>
+            </button>
+
+            <!-- 5. DECIDING STATE (Save vs Discard) -->
+            <div x-show="state === 'deciding'" class="decision-container">
+                <!-- Page Left: SAVE (Green Heart Button) -->
+                <button @click="saveStory" class="decide-btn btn-yes" title="Guardar">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z" />
+                    </svg>
+                </button>
+
+                <!-- Page Right: DISCARD (Red Trash Button) -->
+                <button @click="discardStory" class="decide-btn btn-no" title="Descartar">
+                    <!-- Fun Trash/Cross SVG -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 6. ERROR STATE -->
+            <div x-show="state === 'error'" class="decide-btn btn-no" style="animation: bounceFloat 2s ease infinite; pointer-events: auto;" @click="state = 'idle'">
+                <!-- Sad Emoji / Cloud SVG -->
+                <svg viewBox="0 0 24 24">
+                    <path d="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M15.5,8A1.5,1.5 0 0,1 17,9.5A1.5,1.5 0 0,1 15.5,11A1.5,1.5 0 0,1 14,9.5A1.5,1.5 0 0,1 15.5,8M8.5,8A1.5,1.5 0 0,1 10,9.5A1.5,1.5 0 0,1 8.5,11A1.5,1.5 0 0,1 7,9.5A1.5,1.5 0 0,1 8.5,8M12,14C14.3,14 16.3,15.3 17.2,17.2L15.4,18C14.8,16.8 13.5,16 12,16C10.5,16 9.2,16.8 8.6,18L6.8,17.2C7.7,15.3 9.7,14 12,14Z" />
+                </svg>
+            </div>
+
+        </div>
+
+        <!-- Hearts Celebration Overlay (Fired when story is saved) -->
+        <div class="celebration-overlay" x-show="celebrationActive">
+            <template x-for="h in celebrationHearts" :key="h.id">
+                <span class="confetti-heart" :style="`left: ${h.x}%; top: ${h.y}%; font-size: ${h.size}rem; animation-delay: ${h.delay}s; --drift: ${h.drift}px; --rot: ${h.rot}deg; color: ${h.color};`" x-text="h.symbol"></span>
+            </template>
+        </div>
+
     </div>
 
     <script>
         function audioRecorder() {
             return {
-                state: 'idle',
+                state: 'warming',
+                lastActivityTime: Date.now(),
                 errorMsg: '',
                 mediaRecorder: null,
                 audioChunks: [],
@@ -62,8 +202,53 @@
                 isPlaying: false,
                 connectionId: null,
                 connection: null,
+                jobId: null,
+                storyFinishedReceived: false,
+
+                // Sparkles background
+                sparklesList: [],
+                // Warmup sparkles
+                warmupSparkles: [],
+                // Music notes floating
+                musicNotes: [],
+                musicInterval: null,
+                // Heart celebration
+                celebrationActive: false,
+                celebrationHearts: [],
 
                 init() {
+                    // Populate background sparkles
+                    for (let i = 0; i < 25; i++) {
+                        this.sparklesList.push({
+                            id: i,
+                            x: Math.random() * 100,
+                            y: Math.random() * 100,
+                            size: Math.random() * 8 + 3,
+                            delay: Math.random() * 8,
+                            duration: Math.random() * 6 + 4
+                        });
+                    }
+
+                    // Populate warmup sparkles
+                    for (let i = 0; i < 20; i++) {
+                        this.warmupSparkles.push({
+                            id: i,
+                            x: Math.random() * 80 + 10,
+                            y: Math.random() * 40 + 40,
+                            size: Math.random() * 6 + 3,
+                            delay: Math.random() * 5,
+                            duration: Math.random() * 4 + 3
+                        });
+                    }
+
+                    // Track user activity to prevent F5 reload
+                    const updateActivity = () => {
+                        this.lastActivityTime = Date.now();
+                    };
+                    ['click', 'touchstart', 'mousemove', 'keydown'].forEach(evt => {
+                        window.addEventListener(evt, updateActivity, { passive: true });
+                    });
+
                     this.connection = new signalR.HubConnectionBuilder()
                         .withUrl("/storyHub")
                         .withHubProtocol(new signalR.protocols.msgpack.MessagePackHubProtocol())
@@ -86,26 +271,87 @@
                     });
 
                     this.connection.on("storyComplete", () => {
-                        this.state = 'idle';
+                        this.storyFinishedReceived = true;
+                        if (!this.isPlaying && this.playbackQueue.length === 0) {
+                            this.state = 'deciding';
+                        }
                     });
 
                     this.connection.on("error", (err) => {
-                        const step = err.step ? err.step + ': ' : '';
-                        this.errorMsg = step + err.message;
+                        console.error("SignalR Hub error:", err);
                         this.state = 'error';
-                        setTimeout(() => {
-                            this.state = 'idle';
-                        }, 5000);
+                        setTimeout(() => { this.state = 'idle'; }, 5000);
                     });
 
-                    this.connection.start().then(() => {
-                        this.connectionId = this.connection.connectionId;
+                    this.connection.start()
+                        .then(async () => {
+                            this.connectionId = this.connection.connectionId;
+                            console.log("[WARMUP] SignalR connected. Starting XTTS preheating warmup...");
+                            try {
+                                const response = await fetch('/api/stories/warmup', { method: 'POST' });
+                                if (response.ok) {
+                                    console.log("[WARMUP] XTTS successfully preheated, entering idle state.");
+                                } else {
+                                    console.warn("[WARMUP] XTTS warmup failed or returned error status:", response.status);
+                                }
+                            } catch (err) {
+                                console.error("[WARMUP] Error during XTTS warmup fetch:", err);
+                            } finally {
+                                this.state = 'idle';
+                                this.lastActivityTime = Date.now();
+                            }
+                        })
+                        .catch(err => {
+                            console.error("SignalR connection failed:", err);
+                            this.state = 'error';
+                            // Fallback to idle so page is not completely bricked if WS fails
+                            setTimeout(() => { this.state = 'idle'; }, 5000);
+                        });
+
+                    // React to playing state for note animations
+                    this.$watch('state', value => {
+                        if (value === 'playing') {
+                            this.startMusicNotes();
+                        } else {
+                            this.stopMusicNotes();
+                        }
                     });
+                },
+
+                // Music Notes generation interval
+                startMusicNotes() {
+                    const symbols = ['🎵', '🎶', '♩', '♪', '✨', '🌸', '🧸'];
+                    const colors = ['#ff7675', '#74b9ff', '#55efc4', '#ffeaa7', '#a29bfe', '#fd79a8'];
+                    let id = 0;
+                    this.musicInterval = setInterval(() => {
+                        if (this.musicNotes.length > 20) {
+                            this.musicNotes.shift();
+                        }
+                        this.musicNotes.push({
+                            id: id++,
+                            symbol: symbols[Math.floor(Math.random() * symbols.length)],
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                            x: (Math.random() - 0.5) * 450,
+                            y: -(Math.random() * 250 + 100),
+                            rot: (Math.random() - 0.5) * 90
+                        });
+                    }, 350);
+                },
+
+                stopMusicNotes() {
+                    if (this.musicInterval) {
+                        clearInterval(this.musicInterval);
+                        this.musicInterval = null;
+                    }
+                    this.musicNotes = [];
                 },
 
                 playNext() {
                     if (this.playbackQueue.length === 0) {
                         this.isPlaying = false;
+                        if (this.storyFinishedReceived) {
+                            this.state = 'deciding';
+                        }
                         return;
                     }
                     this.isPlaying = true;
@@ -113,7 +359,10 @@
                     const url = URL.createObjectURL(blob);
                     const audio = new Audio(url);
                     this.state = 'playing';
-                    audio.play();
+                    audio.play().catch(e => {
+                        console.error("Audio playback error:", e);
+                        this.playNext(); // skip failed audio chunk
+                    });
                     audio.onended = () => {
                         URL.revokeObjectURL(url);
                         this.playNext();
@@ -121,9 +370,17 @@
                 },
 
                 toggleRecording() {
+                    // Check if more than 5 minutes have passed since last interaction
+                    if (Date.now() - this.lastActivityTime > 5 * 60 * 1000) {
+                        console.log("[INACTIVITY] Inactivity detected (over 5 minutes). Reloading page to preheat...");
+                        window.location.reload();
+                        return;
+                    }
+                    this.lastActivityTime = Date.now(); // update interaction timestamp
+
                     if (this.state === 'recording') {
                         this.stopRecording();
-                    } else {
+                    } else if (this.state === 'idle') {
                         this.startRecording();
                     }
                 },
@@ -131,9 +388,13 @@
                 startRecording() {
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                         this.state = 'error';
-                        this.errorMsg = 'Recording not supported in this browser.';
                         return;
                     }
+
+                    this.storyFinishedReceived = false;
+                    this.playbackQueue = [];
+                    this.isPlaying = false;
+                    this.jobId = null;
 
                     navigator.mediaDevices.getUserMedia({ audio: true })
                         .then(stream => {
@@ -151,16 +412,10 @@
 
                             this.mediaRecorder.start();
                             this.state = 'recording';
-                            this.errorMsg = '';
                         })
                         .catch(err => {
-                            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                                this.state = 'error';
-                                this.errorMsg = 'Microphone access denied. Please enable it in your browser settings.';
-                            } else {
-                                this.state = 'error';
-                                this.errorMsg = 'Could not access microphone.';
-                            }
+                            console.error("Error accessing microphone:", err);
+                            this.state = 'error';
                         });
                 },
 
@@ -182,23 +437,74 @@
                         .then(async res => {
                             if (res.ok) {
                                 const data = await res.json();
-                                this.state = 'loading';
-                            } else if (res.status === 413) {
-                                this.state = 'error';
-                                this.errorMsg = 'Recording is too large. Please try a shorter recording.';
-                            } else if (res.status === 500) {
-                                const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
-                                this.state = 'error';
-                                this.errorMsg = err.detail || err.title || 'Server error';
+                                this.jobId = data.jobId;
                             } else {
+                                console.error("Server upload failed with status:", res.status);
                                 this.state = 'error';
-                                this.errorMsg = 'Failed to send recording. Please try again.';
                             }
                         })
-                        .catch(() => {
+                        .catch(err => {
+                            console.error("Upload network error:", err);
                             this.state = 'error';
-                            this.errorMsg = 'Network error. Please check your connection.';
                         });
+                },
+
+                saveStory() {
+                    if (!this.jobId) {
+                        this.state = 'idle';
+                        return;
+                    }
+
+                    // Fire save request to persist story
+                    fetch(`/api/stories/${this.jobId}/save`, { method: 'POST' })
+                        .then(res => {
+                            if (res.ok) {
+                                this.triggerCelebration();
+                            } else {
+                                console.error("Save story returned error status:", res.status);
+                                this.state = 'idle';
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Save story network error:", err);
+                            this.state = 'idle';
+                        });
+                },
+
+                discardStory() {
+                    // Do nothing and reset directly back to idle with a sweet fade out transition
+                    this.state = 'idle';
+                    this.jobId = null;
+                },
+
+                triggerCelebration() {
+                    this.celebrationActive = true;
+                    this.celebrationHearts = [];
+                    const symbols = ['❤️', '💖', '💚', '💛', '💙', '✨', '🎈'];
+                    const colors = ['#ff7675', '#fd79a8', '#55efc4', '#ffeaa7', '#a29bfe'];
+
+                    // Spawn confetti hearts rising from bottom
+                    for (let i = 0; i < 40; i++) {
+                        this.celebrationHearts.push({
+                            id: i,
+                            symbol: symbols[Math.floor(Math.random() * symbols.length)],
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                            x: Math.random() * 100,
+                            y: 80 + Math.random() * 20, // Start near the bottom/center
+                            size: Math.random() * 2.5 + 1.5,
+                            delay: Math.random() * 0.8,
+                            drift: (Math.random() - 0.5) * 300,
+                            rot: (Math.random() - 0.5) * 180
+                        });
+                    }
+
+                    // Reset back to idle after animation finishes
+                    setTimeout(() => {
+                        this.celebrationActive = false;
+                        this.celebrationHearts = [];
+                        this.state = 'idle';
+                        this.jobId = null;
+                    }, 3000);
                 }
             };
         }

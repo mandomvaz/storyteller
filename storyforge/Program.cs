@@ -138,12 +138,15 @@ app.MapPost("/api/stories/new", async (HttpRequest request, Channel<PipelineJob>
             return Results.StatusCode(415);
         }
 
-        var stream = file.OpenReadStream();
+        var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream, cancellationToken);
+        memoryStream.Position = 0;
+
         var job = new PipelineJob
         {
             JobId = Guid.NewGuid(),
             ConnectionId = connectionId,
-            AudioStream = stream,
+            AudioStream = memoryStream,
             ContentType = contentType
         };
 
@@ -151,6 +154,22 @@ app.MapPost("/api/stories/new", async (HttpRequest request, Channel<PipelineJob>
 
         return Results.Ok(new { jobId = job.JobId });
     });
+
+app.MapPost("/api/stories/warmup", async (ITextToAudioService ttsService) =>
+{
+    try
+    {
+        Console.WriteLine($"[WARMUP_API] [{DateTime.UtcNow:HH:mm:ss.fff}] Triggering blocking under-demand XTTS preheating...");
+        await ttsService.GetAudioContentAsync("calentamiento");
+        Console.WriteLine($"[WARMUP_API] [{DateTime.UtcNow:HH:mm:ss.fff}] XTTS successfully preheated!");
+        return Results.Ok(new { warmed = true });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[WARMUP_API_FAILED] [{DateTime.UtcNow:HH:mm:ss.fff}] Warmup failed: {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
 
 app.MapPost("/api/stories/{id:guid}/save", async (Guid id, PersistenceService persistenceService) =>
 {

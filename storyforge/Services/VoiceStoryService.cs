@@ -32,7 +32,13 @@ public class VoiceStoryService
 
         var audioToTextService = _kernel.GetRequiredService<IAudioToTextService>();
         var audioContent = new AudioContent(ms.ToArray(), contentType);
-        var result = await audioToTextService.GetTextContentAsync(audioContent, null, _kernel, cancellationToken);
+        
+        var executionSettings = new Microsoft.SemanticKernel.Connectors.OpenAI.OpenAIAudioToTextExecutionSettings("audio.webm")
+        {
+            Language = "es"
+        };
+
+        var result = await audioToTextService.GetTextContentAsync(audioContent, executionSettings, _kernel, cancellationToken);
         return result?.Text ?? string.Empty;
     }
 
@@ -53,7 +59,7 @@ public class VoiceStoryService
         chatHistory.AddUserMessage(text);
 
         var buffer = new StringBuilder();
-        var story = new Story();
+        var story = new Story { Id = Guid.Parse(jobId) };
         var isFirstParagraph = true;
 
         try
@@ -75,6 +81,8 @@ public class VoiceStoryService
 
                     if (paragraph.Length > 0)
                     {
+                        var pSw = System.Diagnostics.Stopwatch.StartNew();
+                        Console.WriteLine($"[PARAGRAPH_GENERATED] [{DateTime.UtcNow:HH:mm:ss.fff}] JobId={jobId} - Writing paragraph to channel. Length={paragraph.Length} chars");
                         if (isFirstParagraph)
                         {
                             story.Title = paragraph;
@@ -87,6 +95,7 @@ public class VoiceStoryService
 
                         await _textCh.Writer.WriteAsync(
                             new TextUnit(jobId, connectionId, paragraph), cancellationToken);
+                        pSw.Stop();
                     }
 
                     idx = textSoFar.IndexOf("\n\n", StringComparison.Ordinal);
@@ -98,6 +107,7 @@ public class VoiceStoryService
                 var remaining = buffer.ToString().Trim();
                 if (remaining.Length > 0)
                 {
+                    Console.WriteLine($"[FINAL_PARAGRAPH_FLUSH] [{DateTime.UtcNow:HH:mm:ss.fff}] JobId={jobId} - Writing final remaining paragraph to channel. Length={remaining.Length} chars");
                     if (isFirstParagraph)
                         story.Title = remaining;
                     else
