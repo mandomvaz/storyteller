@@ -150,3 +150,26 @@ El Backoffice (`backoffice/index.html`) ofrece una interfaz de gestión sofistic
    Un sistema dinámico de notificaciones en la esquina inferior derecha. Al guardar, borrar o fallar una operación, se inyecta un banner reactivo (`toast-success` o `toast-error`) que desaparece con un desvanecimiento controlado a los 3.5 segundos.
 6. **Responsividad Inteligente (Modo Retrato)**:
    El archivo `backoffice.css` está equipado con Media Queries avanzadas. En pantallas móviles y tablets (menores a 768px), el diseño de doble panel (sidebar + editor) se divide en dos vistas tipo slide utilizando la clase de Alpine `currentView === 'list' ? 'aside-visible' : 'main-visible'`. Un botón superior de retorno permite a los administradores navegar cómodamente desde sus móviles.
+
+---
+
+## 📱 3. Soporte PWA (Progressive Web App) e Instalabilidad
+
+StoryForge se ha transformado en una **PWA completa e instalable** para tablets y móviles Android/iOS. Esto permite ejecutar la aplicación a pantalla completa, eliminando el marco del navegador y la barra de navegación tradicional de internet para que se sienta como una aplicación nativa instalada.
+
+### ⚙️ Componentes de la PWA
+El soporte PWA se implementa a través de tres pilares de código:
+
+1. **El Manifiesto de la Aplicación (`manifest.json`)**:
+   Ubicado en [manifest.json](file:///c:/workspace/code/storyforge/storyforge/wwwroot/manifest.json). Define para Android e iOS los metadatos esenciales de la aplicación:
+   * **Nombre y descripción** del icono en el lanzador.
+   * **Colores de fondo** (`#1a102f`) y del tema principal (`#6c5ce7`).
+   * **Modo de visualización**: `"display": "standalone"`, que oculta el navegador y da aspecto nativo de app de pantalla completa.
+   * **Iconos del Lanzador (`icon.png`)**: Icono mágico en alta resolución de 512x512 y 192x192 adaptable y enmascarable.
+2. **El Service Worker (`sw.js`)**:
+   Ubicado en [sw.js](file:///c:/workspace/code/storyforge/storyforge/wwwroot/sw.js). Es un script en segundo plano que:
+   * **Almacena en Caché Offline** la carcasa visual de la aplicación (archivos HTML, CSS, Alpine.js y SignalR CDN).
+   * **Estrategia Stale-While-Revalidate**: Intercepta las solicitudes estáticas de red para servirlas inmediatamente desde el almacenamiento local sin latencia (incluso sin internet), mientras actualiza los archivos en segundo plano. Los endpoints dinámicos de `/api/` y SignalR se ignoran por completo para asegurar la conexión real con el servidor de IA.
+   * Satisface el requisito estricto de los navegadores para poder **disparar el cartel nativo de instalación**.
+3. **Integración en la Cabecera (`index.html`)**:
+   Añade meta tags específicos de Apple iOS y la llamada de inicialización en el método `init()` de Alpine para registrar el Service Worker automáticamente al cargar la aplicación.
