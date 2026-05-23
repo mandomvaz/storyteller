@@ -1,8 +1,5 @@
-# audio-recorder Specification
+## MODIFIED Requirements
 
-## Purpose
-Visual, tactile vintage magic book interface allowing child-friendly audio recording, spell casting waiting state, Saving/Discarding animations, and auto-reload preheating inactivity guard.
-## Requirements
 ### Requirement: Magical Audio Recording, Playback, and Warmup Control
 
 The main page SHALL display an immersive vintage open magic book that acts as the container for storytelling. It SHALL utilize a hand-crafted inline vector SVG design locked to a `7:5` aspect ratio. The system SHALL display interactive buttons over the book crease to control recording, playback, saving, and preheating states.
@@ -38,4 +35,3 @@ The main page SHALL display an immersive vintage open magic book that acts as th
 - **AND** the user taps the Microphone button (or any interactive trigger)
 - **THEN** the frontend SHALL execute a clean page reload (`window.location.reload()`)
 - **AND** the browser SHALL re-enter the page-load warmup blocker state to pre-warm the XTTS checkpoints in VRAM
-

@@ -25,6 +25,7 @@ builder.Services.AddSingleton<IStoryRepository>(sp =>
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PersistenceService>();
 builder.Services.AddSingleton<BadgeService>();
+builder.Services.AddSingleton<StoryWarmupService>();
 
 builder.Services.AddScoped<VoiceStoryService>();
 builder.Services.AddScoped<TextToAudioService>();
@@ -156,13 +157,12 @@ app.MapPost("/api/stories/new", async (HttpRequest request, Channel<PipelineJob>
         return Results.Ok(new { jobId = job.JobId });
     });
 
-app.MapPost("/api/stories/warmup", async (ITextToAudioService ttsService) =>
+app.MapPost("/api/stories/warmup", async (StoryWarmupService warmupService) =>
 {
     try
     {
-        Console.WriteLine($"[WARMUP_API] [{DateTime.UtcNow:HH:mm:ss.fff}] Triggering blocking under-demand XTTS preheating...");
-        await ttsService.GetAudioContentAsync("calentamiento");
-        Console.WriteLine($"[WARMUP_API] [{DateTime.UtcNow:HH:mm:ss.fff}] XTTS successfully preheated!");
+        Console.WriteLine($"[WARMUP_API] [{DateTime.UtcNow:HH:mm:ss.fff}] Warmup requested...");
+        await warmupService.WarmupAsync();
         return Results.Ok(new { warmed = true });
     }
     catch (Exception ex)
@@ -260,4 +260,78 @@ app.MapPost("/api/stories/{id:guid}/replay", async (
     return Results.Ok(new { replayed = true });
 });
 
+app.MapPut("/api/stories/{id:guid}", async (Guid id, Story updatedStory, IStoryRepository repository) =>
+{
+    try
+    {
+        var existing = await repository.GetByIdAsync(id);
+        if (existing is null)
+        {
+            return Results.NotFound(new { error = "Cuento no encontrado" });
+        }
+
+        existing.Title = updatedStory.Title;
+        existing.Badge = updatedStory.Badge;
+        existing.Paragraphs = updatedStory.Paragraphs;
+
+        await repository.UpdateAsync(existing);
+        return Results.Ok(new { updated = true });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[UPDATE_STORY_FAILED] StoryId={id} - {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
+app.MapDelete("/api/stories/{id:guid}", async (Guid id, IStoryRepository repository) =>
+{
+    try
+    {
+        var existing = await repository.GetByIdAsync(id);
+        if (existing is null)
+        {
+            return Results.NotFound(new { error = "Cuento no encontrado" });
+        }
+
+        await repository.DeleteAsync(id);
+        return Results.Ok(new { deleted = true });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DELETE_STORY_FAILED] StoryId={id} - {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
+app.MapPost("/api/stories/tts", async (
+    TtsRequest request,
+    ITextToAudioService ttsService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.Text))
+        {
+            return Results.BadRequest(new { error = "El texto es requerido" });
+        }
+
+        // Utiliza estrictamente la abstracción oficial de Semantic Kernel
+        var audioContent = await ttsService.GetAudioContentAsync(request.Text, cancellationToken: cancellationToken);
+        if (audioContent?.Data is null)
+        {
+            return Results.Problem("Error en la síntesis de voz a través de Semantic Kernel");
+        }
+
+        return Results.File(audioContent.Data.Value.ToArray(), "audio/wav");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SINGLE_TTS_FAILED] {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
 app.Run();
+
+public record TtsRequest(string Text);

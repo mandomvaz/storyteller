@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🛠️</text><text x=%2255%22 y=%2245%22 font-size=%2240%22>✨</text></svg>">
+    <title>StoryForge - Panel de Gestión</title>
+    <link rel="stylesheet" href="backoffice.css?v=1">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+
+    <div x-data="backoffice()" class="backoffice-container" :class="`view-${currentView}`" x-cloak>
+        
+        <!-- SIDEBAR - STORY LIST -->
+        <aside class="sidebar">
+            <header class="sidebar-header">
+                <div class="brand-row">
+                    <span class="brand">📖 StoryForge <span style="font-size:0.75rem; letter-spacing:1px; opacity:0.65; font-weight:900;">ADMIN</span></span>
+                    <a href="/" class="kids-link-btn" title="Volver a la App Infantil">🧒 Volver</a>
+                </div>
+                <div class="subtitle">
+                    <span>Panel de Control</span>
+                    <span class="story-counter" x-text="`${stories.length} ${stories.length === 1 ? 'cuento' : 'cuentos'}`">0 cuentos</span>
+                </div>
+            </header>
+            
+            <!-- Search bar -->
+            <div class="search-container">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input 
+                        type="text" 
+                        x-model="searchQuery" 
+                        class="search-input" 
+                        placeholder="Buscar cuentos..."
+                        aria-label="Buscar cuentos"
+                    >
+                    <button 
+                        x-show="searchQuery" 
+                        @click="searchQuery = ''" 
+                        class="clear-search-btn" 
+                        title="Limpiar búsqueda"
+                    >
+                        <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Story List Scrollable -->
+            <div class="story-list">
+                <template x-for="story in filteredStories()" :key="story.id">
+                    <button 
+                        @click="selectStory(story)" 
+                        class="story-card" 
+                        :class="{ 'active': selectedStoryCopy && selectedStoryCopy.id === story.id }"
+                        :title="`Editar ${story.title}`"
+                    >
+                        <div class="story-card-header">
+                            <h3 class="story-card-title" x-text="story.title || 'Cuento sin título'"></h3>
+                            <span class="story-card-badge" x-text="cleanBadge(story.badge)"></span>
+                        </div>
+                        <div class="story-card-footer">
+                            <span class="story-card-date">
+                                <svg style="width:12px;height:12px;opacity:0.75;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span x-text="formatDate(story.createdAt)"></span>
+                            </span>
+                        </div>
+                    </button>
+                </template>
+                
+                <!-- No results state -->
+                <div x-show="filteredStories().length === 0" class="no-results-list">
+                    <span class="no-results-icon">🔍</span>
+                    <span>No encontramos cuentos que coincidan con la búsqueda.</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- DETAIL / EDITOR PANE -->
+        <main class="detail-pane">
+            
+            <!-- 1. Placeholder when no story is selected -->
+            <div x-show="!selectedStoryCopy" class="editor-placeholder">
+                <svg class="magic-book-svg-placeholder" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffeaa7" />
+                            <stop offset="100%" stop-color="#fdcb6e" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 30 50 C 30 50, 70 30, 100 50 L 100 150 C 70 130, 30 140, 30 140 Z" fill="none" stroke="url(#goldGrad)" stroke-width="5" stroke-linejoin="round" opacity="0.8"/>
+                    <path d="M 170 50 C 170 50, 130 30, 100 50 L 100 150 C 130 130, 170 140, 170 140 Z" fill="none" stroke="url(#goldGrad)" stroke-width="5" stroke-linejoin="round" opacity="0.8"/>
+                    <line x1="100" y1="45" x2="100" y2="155" stroke="#ffeaa7" stroke-width="3" opacity="0.5"/>
+                    <circle cx="100" cy="50" r="10" fill="#ffeaa7" opacity="0.3" />
+                </svg>
+                <h2 class="placeholder-title">Consola del Cuentacuentos</h2>
+                <p class="placeholder-desc">Selecciona un cuento de la lista de la izquierda para editar sus párrafos, actualizar su título o eliminarlo del sistema.</p>
+            </div>
+            
+            <!-- 2. Editor form when a story is active -->
+            <div x-show="selectedStoryCopy" class="editor-form">
+                
+                <header class="editor-header">
+                    <h2 class="editor-main-title">
+                        <span style="font-size: 1.5rem;">📝</span>
+                        <span>Editar Cuento</span>
+                    </h2>
+                    
+                    <!-- Top return button for portrait mobile/tablets -->
+                    <button @click="currentView = 'list'" class="btn btn-secondary" style="display:none; padding:8px 16px; height:38px; border-radius:10px;" :style="window.innerWidth <= 768 ? 'display:flex' : ''">
+                        ⬅️ Volver a Lista
+                    </button>
+                </header>
+                
+                <!-- Title and badge tone row -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Título del Cuento</label>
+                        <input 
+                            type="text" 
+                            x-model="selectedStoryCopy.title" 
+                            class="input-text" 
+                            placeholder="Introduce el título del cuento..."
+                            aria-label="Título del cuento"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label class="label">Emojis de Tono (Badge)</label>
+                        <input 
+                            type="text" 
+                            x-model="selectedStoryCopy.badge" 
+                            class="input-text" 
+                            placeholder="🚀🧙‍♂️✨..."
+                            aria-label="Emojis del cuento"
+                        >
+                    </div>
+                </div>
+                
+                <!-- Paragraph cards editor section -->
+                <section class="paragraphs-section">
+                    <div class="paragraphs-section-header">
+                        <span class="label">Párrafos del Cuento</span>
+                        <span class="story-counter" x-text="`${selectedStoryCopy.paragraphs.length} ${selectedStoryCopy.paragraphs.length === 1 ? 'párrafo' : 'párrafos'}`" style="background:rgba(255,255,255,0.05);color:var(--color-text-muted);border-color:var(--border-glass);">0 párrafos</span>
+                    </div>
+                    
+                    <div class="paragraphs-editor-container">
+                        <template x-for="(paragraph, index) in selectedStoryCopy.paragraphs" :key="index">
+                            <div class="paragraph-card">
+                                <div class="paragraph-card-header">
+                                    <span class="paragraph-index-pill" x-text="`Párrafo ${index + 1}`">Párrafo 1</span>
+                                    
+                                    <div class="paragraph-controls">
+                                        <!-- Listen to individual paragraph (Decoupled Semantic Kernel) -->
+                                        <button 
+                                            @click="speakParagraph(index, paragraph)" 
+                                            class="card-action-btn"
+                                            :class="{ 'speak-active': speakingIndex === index }"
+                                            :disabled="speakingIndex !== null || !paragraph.trim()"
+                                            title="Escuchar este párrafo narrado"
+                                        >
+                                            <span x-show="speakingIndex !== index">🔊</span>
+                                            <!-- Simple tiny mini-wave playing loader -->
+                                            <span x-show="speakingIndex === index" style="font-size:0.8rem;animation:minorFloat 1s ease infinite;">🎙️</span>
+                                        </button>
+                                        
+                                        <!-- Reorder Up -->
+                                        <button 
+                                            @click="moveParagraph(index, -1)" 
+                                            class="card-action-btn" 
+                                            :disabled="index === 0" 
+                                            title="Subir párrafo"
+                                        >
+                                            ▲
+                                        </button>
+                                        
+                                        <!-- Reorder Down -->
+                                        <button 
+                                            @click="moveParagraph(index, 1)" 
+                                            class="card-action-btn" 
+                                            :disabled="index === selectedStoryCopy.paragraphs.length - 1" 
+                                            title="Bajar párrafo"
+                                        >
+                                            ▼
+                                        </button>
+                                        
+                                        <!-- Delete paragraph -->
+                                        <button 
+                                            @click="deleteParagraph(index)" 
+                                            class="card-action-btn delete" 
+                                            title="Eliminar párrafo"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                                <textarea 
+                                    x-model="selectedStoryCopy.paragraphs[index]" 
+                                    class="paragraph-textarea" 
+                                    placeholder="Escribe el contenido del párrafo..."
+                                    aria-label="Contenido del párrafo"
+                                ></textarea>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <button @click="addParagraph" class="add-paragraph-btn" title="Agregar Párrafo Nuevo">
+                        <span>➕ Añadir Nuevo Párrafo</span>
+                    </button>
+                </section>
+                
+                <!-- Bottom Action Controls -->
+                <footer class="editor-actions">
+                    <button 
+                        @click="showDeleteModal = true" 
+                        class="btn btn-danger" 
+                        :disabled="isSaving || isDeleting"
+                    >
+                        <span>🗑️ Eliminar Cuento</span>
+                    </button>
+                    
+                    <div class="action-main-group">
+                        <button 
+                            @click="selectStory(selectedStory)" 
+                            class="btn btn-secondary" 
+                            :disabled="isSaving || isDeleting"
+                        >
+                            <span>Descartar Cambios</span>
+                        </button>
+                        
+                        <button 
+                            @click="saveStory" 
+                            class="btn btn-primary" 
+                            :disabled="isSaving || isDeleting || !selectedStoryCopy.title.trim()"
+                        >
+                            <svg x-show="isSaving" class="spinner" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M4 12a8 8 0 0 1 8-8"></path>
+                            </svg>
+                            <span x-text="isSaving ? 'Guardando...' : '💾 Guardar Cuento'">Guardar Cuento</span>
+                        </button>
+                    </div>
+                </footer>
+                
+            </div>
+        </main>
+        
+        <!-- DESTRUCTIVE CONFIRMATION MODAL -->
+        <div x-show="showDeleteModal" class="modal-overlay" style="display:none;">
+            <div class="modal-card" @click.away="showDeleteModal = false">
+                <div class="modal-icon">⚠️</div>
+                <h3 class="modal-title">¿Eliminar este cuento?</h3>
+                <p class="modal-desc">Esta acción es irreversible y removerá de forma permanente el cuento de la base de datos y de la biblioteca de los niños.</p>
+                <div class="modal-actions">
+                    <button 
+                        @click="showDeleteModal = false" 
+                        class="btn btn-secondary" 
+                        :disabled="isDeleting"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        @click="deleteStory" 
+                        class="btn btn-danger" 
+                        :disabled="isDeleting"
+                        style="background:var(--color-danger);color:white;"
+                    >
+                        <svg x-show="isDeleting" class="spinner" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M4 12a8 8 0 0 1 8-8"></path>
+                        </svg>
+                        <span x-text="isDeleting ? 'Eliminando...' : 'Sí, Eliminar'">Sí, Eliminar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLOATING TOAST NOTIFICATION CONTAINER -->
+        <div class="toast-container">
+            <template x-for="toast in toasts" :key="toast.id">
+                <div class="toast" :class="`toast-${toast.type}`">
+                    <span class="toast-icon" x-text="toast.type === 'success' ? '✅' : '❌'"></span>
+                    <span x-text="toast.message"></span>
+                </div>
+            </template>
+        </div>
+
+    </div>
+
+    <script>
+        function backoffice() {
+            return {
+                stories: [],
+                searchQuery: '',
+                selectedStory: null,
+                selectedStoryCopy: null,
+                isSaving: false,
+                isDeleting: false,
+                showDeleteModal: false,
+                currentView: 'list',
+                toasts: [],
+                speakingIndex: null,
+
+                async init() {
+                    await this.loadStories();
+                    
+                    // Handle resizing for portrait view slides
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth > 768) {
+                            this.currentView = 'list';
+                        }
+                    });
+                },
+
+                async loadStories() {
+                    try {
+                        const res = await fetch('/api/stories');
+                        if (res.ok) {
+                            this.stories = await res.json();
+                        } else {
+                            this.showToast('error', 'Error al obtener cuentos del servidor');
+                        }
+                    } catch (err) {
+                        console.error("Fetch stories failed:", err);
+                        this.showToast('error', 'Error de red al cargar cuentos');
+                    }
+                },
+
+                filteredStories() {
+                    const query = this.searchQuery.toLowerCase().trim();
+                    if (!query) return this.stories;
+                    return this.stories.filter(s => 
+                        (s.title && s.title.toLowerCase().includes(query)) || 
+                        (s.badge && s.badge.toLowerCase().includes(query))
+                    );
+                },
+
+                async selectStory(story) {
+                    try {
+                        const res = await fetch(`/api/stories/${story.id}`);
+                        if (res.ok) {
+                            const fullStory = await res.json();
+                            this.selectedStory = fullStory;
+                            this.selectedStoryCopy = JSON.parse(JSON.stringify(fullStory));
+                            this.currentView = 'detail';
+                            this.speakingIndex = null;
+                        } else {
+                            this.showToast('error', 'No se pudo cargar la historia seleccionada');
+                        }
+                    } catch (err) {
+                        console.error("Select story failed:", err);
+                        this.showToast('error', 'Error de red al seleccionar el cuento');
+                    }
+                },
+
+                async saveStory() {
+                    if (!this.selectedStoryCopy) return;
+                    this.isSaving = true;
+                    try {
+                        const res = await fetch(`/api/stories/${this.selectedStoryCopy.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.selectedStoryCopy)
+                        });
+                        if (res.ok) {
+                            this.showToast('success', '¡Cuento guardado con éxito!');
+                            await this.loadStories();
+                            // Update our cached base story state to match current state
+                            this.selectedStory = JSON.parse(JSON.stringify(this.selectedStoryCopy));
+                        } else {
+                            this.showToast('error', 'Error del servidor al intentar guardar');
+                        }
+                    } catch (err) {
+                        console.error("Save story failed:", err);
+                        this.showToast('error', 'Error de conexión al guardar el cuento');
+                    } finally {
+                        this.isSaving = false;
+                    }
+                },
+
+                async deleteStory() {
+                    if (!this.selectedStoryCopy) return;
+                    this.isDeleting = true;
+                    try {
+                        const res = await fetch(`/api/stories/${this.selectedStoryCopy.id}`, {
+                            method: 'DELETE'
+                        });
+                        if (res.ok) {
+                            this.showToast('success', 'Cuento eliminado permanentemente');
+                            this.selectedStory = null;
+                            this.selectedStoryCopy = null;
+                            this.showDeleteModal = false;
+                            await this.loadStories();
+                            this.currentView = 'list';
+                        } else {
+                            this.showToast('error', 'Error del servidor al intentar borrar');
+                        }
+                    } catch (err) {
+                        console.error("Delete story failed:", err);
+                        this.showToast('error', 'Error de conexión al borrar el cuento');
+                    } finally {
+                        this.isDeleting = false;
+                    }
+                },
+
+                async speakParagraph(index, text) {
+                    if (this.speakingIndex !== null) return;
+                    if (!text || !text.trim()) return;
+
+                    this.speakingIndex = index;
+                    try {
+                        const res = await fetch('/api/stories/tts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text })
+                        });
+                        
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const audio = new Audio(url);
+                            
+                            audio.play().catch(e => {
+                                console.error("Single TTS playback blocked or failed:", e);
+                                this.showToast('error', 'Reproducción de audio bloqueada o fallida');
+                                this.speakingIndex = null;
+                            });
+
+                            audio.onended = () => {
+                                URL.revokeObjectURL(url);
+                                this.speakingIndex = null;
+                            };
+                            
+                            audio.onerror = () => {
+                                URL.revokeObjectURL(url);
+                                this.showToast('error', 'Error en el archivo de audio');
+                                this.speakingIndex = null;
+                            };
+                        } else {
+                            console.error("TTS endpoint returned status:", res.status);
+                            this.showToast('error', 'La síntesis de voz en Semantic Kernel falló');
+                            this.speakingIndex = null;
+                        }
+                    } catch (err) {
+                        console.error("TTS fetch connection error:", err);
+                        this.showToast('error', 'Error de red al solicitar la síntesis de voz');
+                        this.speakingIndex = null;
+                    }
+                },
+
+                moveParagraph(index, direction) {
+                    if (!this.selectedStoryCopy) return;
+                    const paragraphs = this.selectedStoryCopy.paragraphs;
+                    const targetIndex = index + direction;
+                    if (targetIndex < 0 || targetIndex >= paragraphs.length) return;
+                    
+                    // Swap paragraphs
+                    const temp = paragraphs[index];
+                    paragraphs[index] = paragraphs[targetIndex];
+                    paragraphs[targetIndex] = temp;
+                },
+
+                deleteParagraph(index) {
+                    if (!this.selectedStoryCopy) return;
+                    this.selectedStoryCopy.paragraphs.splice(index, 1);
+                },
+
+                addParagraph() {
+                    if (!this.selectedStoryCopy) return;
+                    this.selectedStoryCopy.paragraphs.push('');
+                },
+
+                cleanBadge(badge) {
+                    if (!badge) return '📖✨🔮🧙‍♂️🏰';
+                    const cleaned = badge.replace(/[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,;¡!¿?()\"'\-:\—]/g, '');
+                    return cleaned || '📖✨🔮🧙‍♂️🏰';
+                },
+
+                showToast(type, message) {
+                    const id = Date.now();
+                    this.toasts.push({ id, type, message });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3500);
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    return date.toLocaleDateString('es-ES', { 
+                        day: '2-digit', 
+                        month: 'short', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            };
+        }
+    </script>
+</body>
+</html>

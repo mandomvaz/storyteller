@@ -8,4 +8,6 @@ public interface IStoryRepository
     Task SaveAsync(Story story);
     Task<List<StorySummary>> GetAllAsync();
     Task<Story?> GetByIdAsync(Guid id);
+    Task UpdateAsync(Story story);
+    Task DeleteAsync(Guid id);
 }

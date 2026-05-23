@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <div x-data="audioRecorder()" x-init="init()" class="app-container" x-cloak>
+    <div x-data="audioRecorder()" class="app-container" x-cloak>
         
         <!-- Beautiful Magical Warmup Loading Screen Overlay (No Text!) -->
         <div x-show="state === 'warming'"
@@ -471,9 +471,9 @@
                 },
 
                 toggleRecording() {
-                    // Check if more than 5 minutes have passed since last interaction
-                    if (Date.now() - this.lastActivityTime > 5 * 60 * 1000) {
-                        console.log("[INACTIVITY] Inactivity detected (over 5 minutes). Reloading page to preheat...");
+                    // Check if more than 4 minutes have passed since last interaction
+                    if (Date.now() - this.lastActivityTime > 4 * 60 * 1000) {
+                        console.log("[INACTIVITY] Inactivity detected (over 4 minutes). Reloading page to preheat...");
                         window.location.reload();
                         return;
                     }

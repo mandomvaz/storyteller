@@ -60,7 +60,7 @@ public class SqliteStoryRepository : IStoryRepository
         await connection.OpenAsync();
 
         var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT Id, Badge FROM Stories ORDER BY CreatedAt DESC";
+        cmd.CommandText = "SELECT Id, Title, Badge, CreatedAt FROM Stories ORDER BY CreatedAt DESC";
 
         var summaries = new List<StorySummary>();
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -68,7 +68,9 @@ public class SqliteStoryRepository : IStoryRepository
         {
             summaries.Add(new StorySummary(
                 Guid.Parse(reader.GetString(0)),
-                reader.GetString(1)));
+                reader.GetString(1),
+                reader.GetString(2),
+                DateTime.Parse(reader.GetString(3), null, System.Globalization.DateTimeStyles.RoundtripKind)));
         }
 
         return summaries;
@@ -97,5 +99,34 @@ public class SqliteStoryRepository : IStoryRepository
         }
 
         return null;
+    }
+
+    public async Task UpdateAsync(Story story)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            UPDATE Stories 
+            SET Title = $title, Badge = $badge, Paragraphs = $paragraphs 
+            WHERE Id = $id
+            """;
+        cmd.Parameters.AddWithValue("$id", story.Id.ToString());
+        cmd.Parameters.AddWithValue("$title", story.Title);
+        cmd.Parameters.AddWithValue("$badge", story.Badge);
+        cmd.Parameters.AddWithValue("$paragraphs", story.SerializeParagraphs());
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM Stories WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        await cmd.ExecuteNonQueryAsync();
     }
 }
