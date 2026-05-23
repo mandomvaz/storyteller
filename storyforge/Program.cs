@@ -10,6 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 
 var builder = WebApplication.CreateBuilder(args);
+Console.WriteLine("=== ANTIGRAVITY MAGIC BOOK SERVER ACTIVE ===");
 
 builder.Services.AddOpenApi();
 
@@ -175,6 +176,88 @@ app.MapPost("/api/stories/{id:guid}/save", async (Guid id, PersistenceService pe
 {
     var saved = await persistenceService.PersistAsync(id);
     return saved ? Results.Ok(new { saved = true }) : Results.NotFound(new { error = "Story not found or expired" });
+});
+
+app.MapGet("/api/stories", async (IStoryRepository repository) =>
+{
+    try
+    {
+        var summaries = await repository.GetAllAsync();
+        return Results.Ok(summaries);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[GET_STORIES_FAILED] {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
+app.MapGet("/api/stories/{id:guid}", async (Guid id, IStoryRepository repository) =>
+{
+    try
+    {
+        var story = await repository.GetByIdAsync(id);
+        return story is not null ? Results.Ok(story) : Results.NotFound(new { error = "Story not found" });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[GET_STORY_FAILED] StoryId={id} - {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
+app.MapPost("/api/stories/{id:guid}/replay", async (
+    Guid id,
+    string connectionId,
+    IStoryRepository repository,
+    Channel<TextUnit> textCh,
+    Channel<AudioUnit> audioCh,
+    TextToAudioService ttsService,
+    AudioDeliveryService deliveryService) =>
+{
+    var story = await repository.GetByIdAsync(id);
+    if (story is null)
+    {
+        return Results.NotFound(new { error = "Story not found" });
+    }
+
+    if (string.IsNullOrEmpty(connectionId))
+    {
+        return Results.BadRequest(new { error = "Connection ID is required." });
+    }
+
+    var jobIdStr = id.ToString();
+    Console.WriteLine($"[REPLAY_START] StoryId={id} - Replaying voice streaming for connection={connectionId}");
+
+    var cts = new CancellationTokenSource();
+    var ttsTask = ttsService.RunAsync(cts.Token);
+    var deliveryTask = deliveryService.RunAsync(cts.Token);
+
+    try
+    {
+        // Enqueue the title of the story first
+        await textCh.Writer.WriteAsync(new TextUnit(jobIdStr, connectionId, story.Title), cts.Token);
+
+        // Enqueue subsequent paragraphs
+        foreach (var paragraph in story.Paragraphs)
+        {
+            await textCh.Writer.WriteAsync(new TextUnit(jobIdStr, connectionId, paragraph), cts.Token);
+        }
+
+        // Close the text channel writer to let the TTS service finish
+        textCh.Writer.Complete();
+
+        // Await the TTS and SignalR delivery workers
+        await Task.WhenAll(ttsTask, deliveryTask);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[REPLAY_FAILED] StoryId={id} ConnectionId={connectionId} - Exception={ex.Message}");
+        cts.Cancel();
+        return Results.Problem(ex.Message);
+    }
+
+    return Results.Ok(new { replayed = true });
 });
 
 app.Run();

@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>📖</text><text x=%2255%22 y=%2245%22 font-size=%2240%22>✨</text></svg>">
     <title>StoryForge Mágico</title>
-    <link rel="stylesheet" href="audio-recorder.module.css">
+    <link rel="stylesheet" href="audio-recorder.module.css?v=3">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.0/dist/browser/signalr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr-protocol-msgpack@8.0.0/dist/browser/signalr-protocol-msgpack.min.js"></script>
@@ -116,6 +117,81 @@
                 <!-- Golden Bookmark Ribbon sticking out bottom -->
                 <path d="M 492 560 L 492 630 L 508 615 L 524 630 L 524 560 Z" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
             </svg>
+
+            <!-- Library Toggle Button (Open bookshelf) -->
+            <button x-show="state === 'idle'" @click="openLibrary" class="library-toggle-btn" title="Biblioteca Mágica">
+                <span class="library-toggle-icon">📚</span>
+            </button>
+
+            <!-- Library Overlay (Grimorio de Reliquias) -->
+            <div x-show="state === 'library' || state === 'library-playing'" class="library-overlay"
+                 x-transition:enter="transition ease-out duration-500"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-300">
+                
+                <!-- Left Page: Medallones 1-4 -->
+                <div class="library-page page-left" :class="{ 'faded-out': state === 'library-playing' }">
+                    <div class="medallion-grid" x-show="libraryStories.length > 0">
+                        <template x-for="(story, index) in currentPageStories('left')" :key="story.id">
+                            <button @click="selectStory(story)" class="story-medallion" :title="story.title">
+                                <span class="medallion-badge" x-text="cleanBadge(story.badge)"></span>
+                            </button>
+                        </template>
+                    </div>
+                    
+                    <!-- Sleeping Book Empty State -->
+                    <div x-show="libraryStories.length === 0" class="empty-library">
+                        <div class="sleeping-book">😴📖</div>
+                        <div class="empty-text">¡Graba un cuento para despertarme!</div>
+                    </div>
+
+                    <!-- Previous Page Arrow -->
+                    <button x-show="libraryPage > 0 && libraryStories.length > 0" @click="prevPage" class="nav-arrow nav-prev" title="Página Anterior">
+                        <svg viewBox="0 0 24 24"><path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Right Page: Medallones 5-8 -->
+                <div class="library-page page-right" :class="{ 'faded-out': state === 'library-playing' }">
+                    <div class="medallion-grid" x-show="libraryStories.length > 0">
+                        <template x-for="(story, index) in currentPageStories('right')" :key="story.id">
+                            <button @click="selectStory(story)" class="story-medallion" :title="story.title">
+                                <span class="medallion-badge" x-text="cleanBadge(story.badge)"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Next Page Arrow -->
+                    <button x-show="hasNextPage() && libraryStories.length > 0" @click="nextPage" class="nav-arrow nav-next" title="Página Siguiente">
+                        <svg viewBox="0 0 24 24"><path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Playback Medallion (Emojis Waving in Center) -->
+                <div x-show="state === 'library-playing'" class="active-playback-container"
+                     x-transition:enter="transition ease-out duration-500 transform scale-0"
+                     x-transition:enter-end="transform scale-100">
+                    <div class="central-medallion">
+                        <template x-for="(emoji, index) in selectedStoryEmojis" :key="index">
+                            <span class="wave-emoji" :style="`animation-delay: ${index * 0.15}s`" x-text="emoji"></span>
+                        </template>
+                    </div>
+                    <div class="playback-indicator">
+                        <span class="sound-wave-bar"></span>
+                        <span class="sound-wave-bar"></span>
+                        <span class="sound-wave-bar"></span>
+                        <span class="sound-wave-bar"></span>
+                    </div>
+                </div>
+
+                <!-- Return Mic Button -->
+                <button @click="backToRecording" class="library-back-btn" :disabled="state === 'library-playing'" title="Volver a Grabar">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <!-- UI Overlay: Interactive Buttons and States -->
@@ -181,6 +257,8 @@
 
         </div>
 
+
+
         <!-- Hearts Celebration Overlay (Fired when story is saved) -->
         <div class="celebration-overlay" x-show="celebrationActive">
             <template x-for="h in celebrationHearts" :key="h.id">
@@ -215,6 +293,11 @@
                 // Heart celebration
                 celebrationActive: false,
                 celebrationHearts: [],
+
+                // Stories Library properties
+                libraryStories: [],
+                libraryPage: 0,
+                selectedStoryEmojis: [],
 
                 init() {
                     // Populate background sparkles
@@ -273,14 +356,24 @@
                     this.connection.on("storyComplete", () => {
                         this.storyFinishedReceived = true;
                         if (!this.isPlaying && this.playbackQueue.length === 0) {
-                            this.state = 'deciding';
+                            if (this.state === 'library-playing') {
+                                this.state = 'library';
+                            } else {
+                                this.state = 'deciding';
+                            }
                         }
                     });
 
                     this.connection.on("error", (err) => {
                         console.error("SignalR Hub error:", err);
                         this.state = 'error';
-                        setTimeout(() => { this.state = 'idle'; }, 5000);
+                        setTimeout(() => {
+                            if (this.state === 'library-playing') {
+                                this.state = 'library';
+                            } else {
+                                this.state = 'idle';
+                            }
+                        }, 5000);
                     });
 
                     this.connection.start()
@@ -310,7 +403,7 @@
 
                     // React to playing state for note animations
                     this.$watch('state', value => {
-                        if (value === 'playing') {
+                        if (value === 'playing' || value === 'library-playing') {
                             this.startMusicNotes();
                         } else {
                             this.stopMusicNotes();
@@ -350,7 +443,11 @@
                     if (this.playbackQueue.length === 0) {
                         this.isPlaying = false;
                         if (this.storyFinishedReceived) {
-                            this.state = 'deciding';
+                            if (this.state === 'library-playing') {
+                                this.state = 'library';
+                            } else {
+                                this.state = 'deciding';
+                            }
                         }
                         return;
                     }
@@ -358,7 +455,11 @@
                     const blob = this.playbackQueue.shift();
                     const url = URL.createObjectURL(blob);
                     const audio = new Audio(url);
-                    this.state = 'playing';
+                    
+                    if (this.state !== 'library-playing') {
+                        this.state = 'playing';
+                    }
+                    
                     audio.play().catch(e => {
                         console.error("Audio playback error:", e);
                         this.playNext(); // skip failed audio chunk
@@ -505,6 +606,92 @@
                         this.state = 'idle';
                         this.jobId = null;
                     }, 3000);
+                },
+
+                // Library Methods
+                openLibrary() {
+                    this.state = 'library';
+                    this.libraryPage = 0;
+                    this.loadLibrary();
+                },
+
+                loadLibrary() {
+                    fetch('/api/stories')
+                        .then(res => {
+                            if (res.ok) return res.json();
+                            throw new Error("Failed to load stories");
+                        })
+                        .then(data => {
+                            this.libraryStories = data || [];
+                        })
+                        .catch(err => {
+                            console.error("Error loading library:", err);
+                            this.libraryStories = [];
+                        });
+                },
+
+                backToRecording() {
+                    this.state = 'idle';
+                },
+
+                currentPageStories(pagePart) {
+                    const pageSize = 8;
+                    const startIndex = this.libraryPage * pageSize;
+                    const pageStories = this.libraryStories.slice(startIndex, startIndex + pageSize);
+                    
+                    if (pagePart === 'left') {
+                        return pageStories.slice(0, 4);
+                    } else {
+                        return pageStories.slice(4, 8);
+                    }
+                },
+
+                hasNextPage() {
+                    const pageSize = 8;
+                    return (this.libraryPage + 1) * pageSize < this.libraryStories.length;
+                },
+
+                nextPage() {
+                    if (this.hasNextPage()) {
+                        this.libraryPage++;
+                    }
+                },
+
+                prevPage() {
+                    if (this.libraryPage > 0) {
+                        this.libraryPage--;
+                    }
+                },
+
+                cleanBadge(badge) {
+                    if (!badge) return '📖✨🔮🧙‍♂️🏰';
+                    const cleaned = badge.replace(/[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,;¡!¿?()\"'\-:\—]/g, '');
+                    return cleaned || '📖✨🔮🧙‍♂️🏰';
+                },
+
+                selectStory(story) {
+                    if (this.state === 'library-playing') return;
+
+                    this.selectedStoryEmojis = Array.from(this.cleanBadge(story.badge));
+                    this.state = 'library-playing';
+
+                    // Reset audio queue
+                    this.playbackQueue = [];
+                    this.isPlaying = false;
+                    this.storyFinishedReceived = false;
+
+                    // Trigger replay API
+                    fetch(`/api/stories/${story.id}/replay?connectionId=${this.connectionId}`, { method: 'POST' })
+                        .then(res => {
+                            if (!res.ok) {
+                                console.error("Error initiating story replay");
+                                this.state = 'library';
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Replay network error:", err);
+                            this.state = 'library';
+                        });
                 }
             };
         }

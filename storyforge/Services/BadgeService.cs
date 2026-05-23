@@ -23,6 +23,12 @@ public class BadgeService
             ["body"] = body
         });
 
-        return result.ToString();
+        var badgeText = result.ToString();
+        var cleanedBadge = System.Text.RegularExpressions.Regex.Replace(
+            badgeText,
+            @"[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,;¡!¿?()""'\-:\—]",
+            "");
+
+        return string.IsNullOrEmpty(cleanedBadge) ? "📖✨🔮🧙‍♂️🏰" : cleanedBadge;
     }
 }
